@@ -1,5 +1,5 @@
 from os_agents_evals.models import FakeModel, Price
-from os_agents_evals.runner import Case, run_eval
+from os_agents_evals.runner import Case, p95, run_eval
 
 
 def two_cases():
@@ -33,3 +33,15 @@ def test_cost_per_1k_queries_comes_from_tokens_and_price_per_mtok():
     result = run_eval(two_cases(), "fake", model)
 
     assert round(result.cost_per_1k, 6) == 0.45
+
+
+def test_p95_latency_uses_nearest_rank():
+    latencies = [round(0.1 * i, 1) for i in range(1, 21)]
+
+    assert p95(latencies) == 1.9
+
+
+def test_result_reports_p95_latency_of_the_model():
+    result = run_eval(two_cases(), "fake", fake({}, latency_s=0.1))
+
+    assert result.p95_latency_s == 0.1

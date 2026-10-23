@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 
 
@@ -12,6 +13,7 @@ class EvalResult:
     model: str
     accuracy: float
     cost_per_1k: float
+    p95_latency_s: float
 
 
 def normalize(text: str) -> str:
@@ -25,6 +27,11 @@ def cost(completion, price) -> float:
     ) / 1_000_000
 
 
+def p95(values) -> float:
+    ordered = sorted(values)
+    return ordered[math.ceil(0.95 * len(ordered)) - 1]
+
+
 def run_eval(cases, name, model) -> EvalResult:
     completions = [model.complete(case.prompt) for case in cases]
     hits = sum(
@@ -36,4 +43,5 @@ def run_eval(cases, name, model) -> EvalResult:
         model=name,
         accuracy=hits / len(cases),
         cost_per_1k=total_cost / len(cases) * 1000,
+        p95_latency_s=p95(completion.latency_s for completion in completions),
     )
