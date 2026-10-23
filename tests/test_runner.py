@@ -25,3 +25,11 @@ def test_accuracy_is_share_of_exact_matches_ignoring_case_and_spaces():
     result = run_eval(two_cases(), "fake", model)
 
     assert result.accuracy == 0.5
+
+
+def test_cost_per_1k_queries_comes_from_tokens_and_price_per_mtok():
+    model = fake({})
+
+    result = run_eval(two_cases(), "fake", model)
+
+    assert round(result.cost_per_1k, 6) == 0.45
