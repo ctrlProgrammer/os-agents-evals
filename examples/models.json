@@ -1,0 +1,18 @@
+{
+  "fake-good": {
+    "type": "fake",
+    "answers": {"Capital of France?": "Paris", "2 + 2?": "4", "Largest planet in the solar system?": "Jupiter", "Chemical symbol for gold?": "Ag"},
+    "latency_s": 1.2,
+    "input_tokens": 120,
+    "output_tokens": 8,
+    "price": {"input_per_mtok": 3.0, "output_per_mtok": 15.0}
+  },
+  "fake-cheap": {
+    "type": "fake",
+    "answers": {"Capital of France?": "paris", "2 + 2?": "5"},
+    "latency_s": 0.4,
+    "input_tokens": 120,
+    "output_tokens": 8,
+    "price": {"input_per_mtok": 0.8, "output_per_mtok": 4.0}
+  }
+}
