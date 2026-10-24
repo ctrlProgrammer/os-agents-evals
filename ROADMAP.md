@@ -15,7 +15,7 @@ Reglas para todos los ítems (ver [README](README.md) para lo que ya existe):
 | 1 | Llamadas en paralelo (`--workers`) — hecho | Velocidad | M | — |
 | 2 | Muestreo estratificado en `--max-evals` — hecho | Muestra confiable | M | — |
 | 3 | Intervalo de confianza de la exactitud — hecho | Muestra confiable | S | — |
-| 4 | Matriz de confusión y precisión, recall y F1 por clase | Calidad | M | — |
+| 4 | Matriz de confusión y precisión, recall y F1 por clase — hecho | Calidad | M | — |
 | 5 | Tasa de respuestas inválidas | Calidad | S | — |
 | 6 | Exactitud por umbral de confianza | Calidad | M | 1 (para tener casos suficientes) |
 | 7 | Costo por acierto | Costo | S | — |
@@ -73,6 +73,8 @@ Otro ejemplo: con A de 50 casos, B de 50 y C de 1, `--max-evals 6` toma 1 de C y
 ## Fase 3. Calidad
 
 ### 4. Matriz de confusión y precisión, recall y F1 por clase
+
+**Estado: hecho.** `per_label` suma `precision`, `recall` y `f1`, el resultado guarda `confusion` y `f1_macro`, y la fila muestra el F1 macro. Una respuesta que no coincide con ninguna etiqueta esperada cuenta como `(otra)`.
 
 **Por qué.** La exactitud global y los aciertos por etiqueta esconden qué se confunde con qué (por ejemplo `nevera/cocacola` contra `nevera/postobon`) y premian responder siempre la clase grande.
 

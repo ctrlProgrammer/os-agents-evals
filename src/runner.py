@@ -1,7 +1,7 @@
 import math
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,8 @@ class EvalResult:
     confidence_wrong: float | None = None
     wall_s: float = 0.0
     accuracy_ci95: tuple[float, float] = (0.0, 0.0)
+    confusion: dict = field(default_factory=dict)
+    f1_macro: float = 0.0
 
 
 def normalize(text: str) -> str:
@@ -65,15 +67,34 @@ def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
         # map keeps the order of the cases, so every answer stays with its case
         completions = list(pool.map(lambda case: model.complete(case.prompt, case.image), cases))
     wall_s = time.perf_counter() - started
+    known = {}
+    for case in cases:
+        known.setdefault(normalize(case.expected), case.expected)
     per_label: dict = {}
+    confusion: dict = {}
     confidence = {True: [], False: []}
     for case, completion in zip(cases, completions):
+        predicted = known.get(normalize(completion.text), "(otra)")
+        row = confusion.setdefault(case.expected, {})
+        row[predicted] = row.get(predicted, 0) + 1
         counts = per_label.setdefault(case.expected, {"correct": 0, "total": 0})
-        hit = normalize(completion.text) == normalize(case.expected)
+        hit = predicted == case.expected
         counts["total"] += 1
         counts["correct"] += hit
         if completion.confidence is not None:
             confidence[hit].append(completion.confidence)
+    predicted_totals: dict = {}
+    for row in confusion.values():
+        for label, count in row.items():
+            predicted_totals[label] = predicted_totals.get(label, 0) + count
+    f1s = []
+    for label, counts in per_label.items():
+        recall = counts["correct"] / counts["total"]
+        precision = counts["correct"] / predicted_totals[label] if predicted_totals.get(label) else 0.0
+        counts["precision"] = precision
+        counts["recall"] = recall
+        counts["f1"] = 0.0 if precision + recall == 0 else 2 * precision * recall / (precision + recall)
+        f1s.append(counts["f1"])
     hits = sum(counts["correct"] for counts in per_label.values())
     total_cost = sum(cost(completion, model.price) for completion in completions)
     return EvalResult(
@@ -87,4 +108,6 @@ def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
         confidence_wrong=mean(confidence[False]),
         wall_s=wall_s,
         accuracy_ci95=wilson(hits, len(cases)),
+        confusion=confusion,
+        f1_macro=sum(f1s) / len(f1s) if f1s else 0.0,
     )
