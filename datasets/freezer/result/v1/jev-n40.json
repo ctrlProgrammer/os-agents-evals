@@ -1,0 +1,44 @@
+{
+  "dataset": "freezer",
+  "version": "v1",
+  "prompt": "prompts/v1/jev.json",
+  "hash": "625324e6",
+  "run_at": "2026-10-24T00:29:54Z",
+  "model": "jev",
+  "accuracy": 0.975,
+  "cost_per_1k": 0.16710015,
+  "p95_latency_s": 0.6183512330171652,
+  "cases": 40,
+  "per_label": {
+    "nevera/cocacola": {
+      "correct": 5,
+      "total": 6
+    },
+    "nevera/postobon": {
+      "correct": 12,
+      "total": 12
+    },
+    "congelador/cremhelado": {
+      "correct": 8,
+      "total": 8
+    },
+    "nevera/sinmarca": {
+      "correct": 5,
+      "total": 5
+    },
+    "nevera/colombiana": {
+      "correct": 7,
+      "total": 7
+    },
+    "nevera/gatorade": {
+      "correct": 1,
+      "total": 1
+    },
+    "congelador/colombina": {
+      "correct": 1,
+      "total": 1
+    }
+  },
+  "confidence_correct": 0.9825641025641025,
+  "confidence_wrong": 0.99
+}

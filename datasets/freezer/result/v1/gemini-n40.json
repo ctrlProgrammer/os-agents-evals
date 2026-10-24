@@ -1,0 +1,44 @@
+{
+  "dataset": "freezer",
+  "version": "v1",
+  "prompt": "prompts/v1/gemini.json",
+  "hash": "592d30dd",
+  "run_at": "2026-10-24T00:31:18Z",
+  "model": "gemini",
+  "accuracy": 0.975,
+  "cost_per_1k": 0.8155249999999998,
+  "p95_latency_s": 2.7106285950285383,
+  "cases": 40,
+  "per_label": {
+    "nevera/cocacola": {
+      "correct": 5,
+      "total": 6
+    },
+    "nevera/postobon": {
+      "correct": 12,
+      "total": 12
+    },
+    "congelador/cremhelado": {
+      "correct": 8,
+      "total": 8
+    },
+    "nevera/sinmarca": {
+      "correct": 5,
+      "total": 5
+    },
+    "nevera/colombiana": {
+      "correct": 7,
+      "total": 7
+    },
+    "nevera/gatorade": {
+      "correct": 1,
+      "total": 1
+    },
+    "congelador/colombina": {
+      "correct": 1,
+      "total": 1
+    }
+  },
+  "confidence_correct": null,
+  "confidence_wrong": null
+}

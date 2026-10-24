@@ -1,0 +1,8 @@
+{
+  "state": "Contexto fijo que precede a cada caso (opcional).",
+  "instructions": "La pregunta que JEV responde sobre cada caso.",
+  "criteria": {
+    "etiqueta": "Qué significa esta etiqueta.",
+    "otra_etiqueta": null
+  }
+}

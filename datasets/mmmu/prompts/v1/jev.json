@@ -1,0 +1,11 @@
+{
+  "state": "Pregunta de opción múltiple sobre la imagen adjunta.",
+  "instructions": "Cuál es la letra de la respuesta correcta?",
+  "criteria": {
+    "A": null,
+    "B": null,
+    "C": null,
+    "D": null,
+    "E": null
+  }
+}

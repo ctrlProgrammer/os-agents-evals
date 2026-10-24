@@ -1,0 +1,20 @@
+{
+  "jev": {
+    "type": "jev",
+    "model": "jev-latest",
+    "api_key_env": "TYPESAFE_API_KEY",
+    "price": {
+      "input_per_mtok": 0.042,
+      "output_per_mtok": 0
+    }
+  },
+  "gemini": {
+    "type": "gemini",
+    "model": "gemini-2.5-flash",
+    "api_key_env": "GEMINI_API_KEY",
+    "price": {
+      "input_per_mtok": 0.3,
+      "output_per_mtok": 2.5
+    }
+  }
+}

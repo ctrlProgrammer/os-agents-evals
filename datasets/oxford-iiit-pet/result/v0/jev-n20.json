@@ -1,0 +1,94 @@
+{
+  "dataset": "oxford-iiit-pet",
+  "version": "v0",
+  "prompt": null,
+  "hash": "011ecfe0",
+  "run_at": "2026-10-23T23:51:34Z",
+  "model": "jev",
+  "accuracy": 0.9,
+  "cost_per_1k": 0.056364000000000004,
+  "p95_latency_s": 0.32136557396734133,
+  "cases": 20,
+  "per_label": {
+    "Abyssinian": {
+      "correct": 1,
+      "total": 1
+    },
+    "american_bulldog": {
+      "correct": 0,
+      "total": 1
+    },
+    "basset_hound": {
+      "correct": 1,
+      "total": 1
+    },
+    "Bengal": {
+      "correct": 1,
+      "total": 1
+    },
+    "Bombay": {
+      "correct": 1,
+      "total": 1
+    },
+    "British_Shorthair": {
+      "correct": 1,
+      "total": 1
+    },
+    "Egyptian_Mau": {
+      "correct": 0,
+      "total": 1
+    },
+    "english_setter": {
+      "correct": 1,
+      "total": 1
+    },
+    "german_shorthaired": {
+      "correct": 1,
+      "total": 1
+    },
+    "havanese": {
+      "correct": 1,
+      "total": 1
+    },
+    "keeshond": {
+      "correct": 1,
+      "total": 1
+    },
+    "Maine_Coon": {
+      "correct": 1,
+      "total": 1
+    },
+    "newfoundland": {
+      "correct": 1,
+      "total": 1
+    },
+    "pomeranian": {
+      "correct": 1,
+      "total": 1
+    },
+    "pug": {
+      "correct": 1,
+      "total": 1
+    },
+    "Russian_Blue": {
+      "correct": 1,
+      "total": 1
+    },
+    "samoyed": {
+      "correct": 1,
+      "total": 1
+    },
+    "shiba_inu": {
+      "correct": 1,
+      "total": 1
+    },
+    "Sphynx": {
+      "correct": 1,
+      "total": 1
+    },
+    "wheaten_terrier": {
+      "correct": 1,
+      "total": 1
+    }
+  }
+}

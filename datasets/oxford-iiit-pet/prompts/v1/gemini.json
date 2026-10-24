@@ -1,0 +1,4 @@
+{
+  "instructions": "Look at the image and name the pet breed.\nReply with only one label from this list:\nAbyssinian\namerican_bulldog\namerican_pit_bull_terrier\nbasset_hound\nbeagle\nBengal\nBirman\nBombay\nboxer\nBritish_Shorthair\nchihuahua\nEgyptian_Mau\nenglish_cocker_spaniel\nenglish_setter\ngerman_shorthaired\ngreat_pyrenees\nhavanese\njapanese_chin\nkeeshond\nleonberger\nMaine_Coon\nminiature_pinscher\nnewfoundland\nPersian\npomeranian\npug\nRagdoll\nRussian_Blue\nsaint_bernard\nsamoyed\nscottish_terrier\nshiba_inu\nSiamese\nSphynx\nstaffordshire_bull_terrier\nwheaten_terrier\nyorkshire_terrier",
+  "temperature": 0
+}

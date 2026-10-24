@@ -5,14 +5,20 @@ description = "CLI that runs one prompt set against several LLMs and compares ac
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+images = ["pillow>=10"]
+dev = ["pytest>=8", "pillow>=10"]
 
 [project.scripts]
-os-evals = "os_agents_evals.cli:main"
+os-evals = "cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["cli", "images", "labels", "models", "prompts", "results", "runner"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]

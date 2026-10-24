@@ -1,0 +1,10 @@
+{
+  "state": "Publicación inmobiliaria de RealsLab a auditar.",
+  "instructions": "Qué etiqueta describe esta publicación?",
+  "criteria": {
+    "ok": "La publicación es consistente. Una dirección vacía no es fraude. Una zona vecina o solapada tampoco.",
+    "fraude": "La dirección, el título o la descripción dicen una zona que contradice la zona GPS, o el anuncio parece falso.",
+    "error_tipeo": "Un número está mal digitado, como ceros de más, un decimal corrido, o un área o un precio imposibles por un error de escritura.",
+    "anomalia_datos": "El precio no cuadra con el valor catastral, el tipo de inmueble no cuadra con la descripción, o la operación se contradice, sin ser un anuncio falso ni un error de un dígito."
+  }
+}
