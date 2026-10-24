@@ -50,7 +50,7 @@ def test_run_prints_one_comparison_row_per_model(tmp_path, capsys):
 
     main(["run", str(dataset), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 50% (IC 9-91%) exactitud, $0.45/1k consultas, p95 0.10s, F1 0.50\n"
+    assert capsys.readouterr().out == "fake: 50% (IC 9-91%) exactitud, $0.45/1k consultas, $0.90/1k aciertos, p95 0.10s, F1 0.50\n"
 
 
 def test_run_scores_text_and_image_cases_from_a_dataset_folder(tmp_path, capsys):
@@ -78,7 +78,7 @@ def test_run_scores_text_and_image_cases_from_a_dataset_folder(tmp_path, capsys)
 
     main(["run", str(tmp_path), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 100% (IC 34-100%) exactitud, $0.45/1k consultas, p95 0.10s, F1 1.00\n"
+    assert capsys.readouterr().out == "fake: 100% (IC 34-100%) exactitud, $0.45/1k consultas, $0.45/1k aciertos, p95 0.10s, F1 1.00\n"
 
 
 def test_run_passes_every_image_when_a_case_has_several(tmp_path, capsys):
@@ -110,7 +110,7 @@ def test_run_passes_every_image_when_a_case_has_several(tmp_path, capsys):
 
     main(["run", str(tmp_path), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 100% (IC 21-100%) exactitud, $0.45/1k consultas, p95 0.10s, F1 1.00\n"
+    assert capsys.readouterr().out == "fake: 100% (IC 21-100%) exactitud, $0.45/1k consultas, $0.45/1k aciertos, p95 0.10s, F1 1.00\n"
 
 
 def test_jev_uses_the_criteria_of_the_chosen_prompt_version(tmp_path, capsys, monkeypatch):
@@ -152,7 +152,7 @@ def test_jev_uses_the_criteria_of_the_chosen_prompt_version(tmp_path, capsys, mo
           "--prompt", "v2", "--max-evals", "1"])
 
     row = capsys.readouterr().out
-    assert row.startswith("jev: 100% (IC 21-100%) exactitud, $42.00/1k consultas, p95 ")
+    assert row.startswith("jev: 100% (IC 21-100%) exactitud, $42.00/1k consultas, $42.00/1k aciertos, p95 ")
     (body,) = seen
     assert body["state"] == "Publicación.\n\nGPS distinto"
     question = body["questions"]["etiqueta"]
@@ -280,7 +280,51 @@ def test_run_scores_a_gemini_ai_studio_reply(tmp_path, capsys, monkeypatch):
     main(["run", str(tmp_path), "--models", "gemini", "--config", str(config)])
 
     row = capsys.readouterr().out
-    assert row.startswith("gemini: 100% (IC 21-100%) exactitud, $300.00/1k consultas, p95 ")
+    assert row.startswith("gemini: 100% (IC 21-100%) exactitud, $300.00/1k consultas, $300.00/1k aciertos, p95 ")
+    assert json.loads((tmp_path / "result" / "v1" / "gemini.json").read_text())["invalid_rate"] is None
+
+
+def test_jev_counts_an_answer_outside_its_criteria_as_invalid(tmp_path, monkeypatch):
+    (tmp_path / "dataset.json").write_text(json.dumps([
+        {"type": "text", "text": "uno", "expected": "ok"},
+        {"type": "text", "text": "dos", "expected": "ok"},
+    ]))
+    write_prompt(tmp_path, "v1", "jev", {"criteria": {"ok": None, "fraude": None}})
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({"jev": {"type": "jev", "price": {"input_per_mtok": 0, "output_per_mtok": 0}}}))
+
+    def poster(url, body, headers):
+        choice = "ok" if body["state"].endswith("uno") else "no se"
+        return {"answers": {"etiqueta": {"choice": choice, "confidence": 0.4}}, "usage": {"input_tokens": 1, "output_tokens": 1}}
+
+    monkeypatch.setenv("TYPESAFE_API_KEY", "jev-secret")
+    monkeypatch.setattr("models.post_json", poster)
+
+    main(["run", str(tmp_path), "--models", "jev", "--config", str(config)])
+
+    result = json.loads((tmp_path / "result" / "v1" / "jev.json").read_text())
+    assert (result["invalid_count"], result["invalid_rate"], result["invalid_samples"]) == (1, 0.5, ["no se"])
+
+
+def test_a_prompt_labels_list_overrides_the_jev_criteria(tmp_path, monkeypatch):
+    (tmp_path / "dataset.json").write_text(json.dumps([
+        {"type": "text", "text": "uno", "expected": "ok"},
+    ]))
+    write_prompt(tmp_path, "v1", "jev", {"criteria": {"ok": None}, "labels": ["ok", "ninguno"]})
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({"jev": {"type": "jev", "price": {"input_per_mtok": 0, "output_per_mtok": 0}}}))
+
+    def poster(url, body, headers):
+        return {"answers": {"etiqueta": {"choice": "ninguno"}}, "usage": {"input_tokens": 1, "output_tokens": 1}}
+
+    monkeypatch.setenv("TYPESAFE_API_KEY", "jev-secret")
+    monkeypatch.setattr("models.post_json", poster)
+
+    main(["run", str(tmp_path), "--models", "jev", "--config", str(config)])
+
+    result = json.loads((tmp_path / "result" / "v1" / "jev.json").read_text())
+    assert result["invalid_count"] == 0
+    assert result["accuracy"] == 0.0
 
 
 def fake_config(tmp_path, answers):

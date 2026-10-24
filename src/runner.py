@@ -25,6 +25,14 @@ class EvalResult:
     accuracy_ci95: tuple[float, float] = (0.0, 0.0)
     confusion: dict = field(default_factory=dict)
     f1_macro: float = 0.0
+    invalid_count: int | None = None
+    invalid_rate: float | None = None
+    invalid_samples: list | None = None
+    cost_per_1k_correct: float | None = None
+    by_confidence: list | None = None
+
+
+CONFIDENCE_THRESHOLDS = (0.5, 0.7, 0.9, 0.95, 0.99)
 
 
 def normalize(text: str) -> str:
@@ -61,7 +69,38 @@ def mean(values) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
+def confidence_table(scored: list[tuple[float | None, bool]]) -> list | None:
+    """Coverage and accuracy at each threshold, for models that report a confidence."""
+    if not scored or all(confidence is None for confidence, _hit in scored):
+        return None
+    rows = []
+    for threshold in CONFIDENCE_THRESHOLDS:
+        kept = [hit for confidence, hit in scored if confidence is not None and confidence >= threshold]
+        rows.append({
+            "threshold": threshold,
+            "coverage": len(kept) / len(scored),
+            "accuracy": None if not kept else sum(kept) / len(kept),
+        })
+    return rows
+
+
+def invalid_report(completions, labels: list[str] | None) -> tuple:
+    """How many answers are outside `labels`. None when the run has no label list."""
+    if labels is None:
+        return None, None, None
+    valid = {normalize(label) for label in labels}
+    samples = []
+    count = 0
+    for completion in completions:
+        if normalize(completion.text) in valid:
+            continue
+        count += 1
+        if len(samples) < 3:
+            samples.append(completion.text.strip()[:80])
+    return count, count / len(completions), samples
+
+
+def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = None) -> EvalResult:
     started = time.perf_counter()
     with ThreadPoolExecutor(max_workers=workers) as pool:
         # map keeps the order of the cases, so every answer stays with its case
@@ -73,6 +112,7 @@ def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
     per_label: dict = {}
     confusion: dict = {}
     confidence = {True: [], False: []}
+    scored = []
     for case, completion in zip(cases, completions):
         predicted = known.get(normalize(completion.text), "(otra)")
         row = confusion.setdefault(case.expected, {})
@@ -81,6 +121,7 @@ def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
         hit = predicted == case.expected
         counts["total"] += 1
         counts["correct"] += hit
+        scored.append((completion.confidence, bool(hit)))
         if completion.confidence is not None:
             confidence[hit].append(completion.confidence)
     predicted_totals: dict = {}
@@ -97,6 +138,7 @@ def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
         f1s.append(counts["f1"])
     hits = sum(counts["correct"] for counts in per_label.values())
     total_cost = sum(cost(completion, model.price) for completion in completions)
+    invalid_count, invalid_rate, invalid_samples = invalid_report(completions, labels)
     return EvalResult(
         model=name,
         accuracy=hits / len(cases),
@@ -110,4 +152,9 @@ def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
         accuracy_ci95=wilson(hits, len(cases)),
         confusion=confusion,
         f1_macro=sum(f1s) / len(f1s) if f1s else 0.0,
+        invalid_count=invalid_count,
+        invalid_rate=invalid_rate,
+        invalid_samples=invalid_samples,
+        cost_per_1k_correct=None if hits == 0 else total_cost / hits * 1000,
+        by_confidence=confidence_table(scored),
     )

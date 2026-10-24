@@ -40,6 +40,19 @@ def test_accuracy_is_share_of_exact_matches_ignoring_case_and_spaces():
     assert result.accuracy == 0.5
 
 
+def test_cost_per_hit_spreads_the_total_cost_over_the_hits_only():
+    result = run_eval(two_cases(), "fake", fake({"Capital of France?": "Paris", "2 + 2?": "5"}))
+
+    assert round(result.cost_per_1k, 6) == 0.45
+    assert round(result.cost_per_1k_correct, 6) == 0.9
+
+
+def test_cost_per_hit_is_empty_when_nothing_is_right():
+    result = run_eval(two_cases(), "fake", fake({}))
+
+    assert result.cost_per_1k_correct is None
+
+
 def test_cost_per_1k_queries_comes_from_tokens_and_price_per_mtok():
     model = fake({})
 
@@ -101,6 +114,34 @@ def test_result_averages_the_confidence_of_right_and_wrong_answers():
     assert result.confidence_wrong == 0.4
 
 
+def test_accuracy_by_confidence_threshold():
+    cases = [Case(prompt=prompt, expected="si") for prompt in "abcd"]
+    model = ConfidentModel({"a": 1.0, "b": 0.9, "c": 0.6, "d": 0.4})
+
+    result = run_eval(cases, "jev", model)
+    by = {row["threshold"]: row for row in result.by_confidence}
+
+    assert [row["threshold"] for row in result.by_confidence] == [0.5, 0.7, 0.9, 0.95, 0.99]
+    assert round(by[0.5]["coverage"], 3) == 0.75
+    assert round(by[0.5]["accuracy"], 3) == 0.667
+    assert (by[0.9]["coverage"], by[0.9]["accuracy"]) == (0.5, 1.0)
+
+
+def test_a_threshold_nobody_reaches_has_no_accuracy():
+    result = run_eval([Case(prompt="a", expected="si")], "jev", ConfidentModel({"a": 0.1}))
+    top = result.by_confidence[-1]
+
+    assert top["threshold"] == 0.99
+    assert top["coverage"] == 0.0
+    assert top["accuracy"] is None
+
+
+def test_models_without_confidence_have_no_threshold_table():
+    result = run_eval(two_cases(), "fake", fake({}))
+
+    assert result.by_confidence is None
+
+
 def test_models_without_confidence_leave_it_empty():
     result = run_eval(two_cases(), "fake", fake({}))
 
@@ -119,6 +160,37 @@ def test_confusion_matrix_and_f1_per_class():
     assert round(result.per_label["b"]["precision"], 3) == 0.667
     assert result.per_label["b"]["recall"] == 1.0
     assert round(result.f1_macro, 3) == 0.733
+
+
+def test_invalid_answers_are_counted_and_still_score_as_misses():
+    cases = [Case(prompt=prompt, expected=expected) for prompt, expected in (("1", "a"), ("2", "a"), ("3", "b"))]
+    model = fake({"1": "a", "2": "A. porque es la primera", "3": "b"})
+
+    result = run_eval(cases, "fake", model, labels=["a", "b"])
+
+    assert result.invalid_count == 1
+    assert round(result.invalid_rate, 3) == 0.333
+    assert result.invalid_samples == ["A. porque es la primera"]
+    assert result.accuracy == 2 / 3
+
+
+def test_invalid_samples_keep_three_and_clip_at_80_characters():
+    text = "x" * 100
+    cases = [Case(prompt=str(index), expected="a") for index in range(4)]
+    model = fake({str(index): text for index in range(4)})
+
+    result = run_eval(cases, "fake", model, labels=["a"])
+
+    assert result.invalid_count == 4
+    assert result.invalid_samples == ["x" * 80] * 3
+
+
+def test_without_labels_the_invalid_fields_stay_empty():
+    result = run_eval(two_cases(), "fake", fake({}))
+
+    assert result.invalid_count is None
+    assert result.invalid_rate is None
+    assert result.invalid_samples is None
 
 
 def test_an_answer_outside_the_labels_counts_as_otra():

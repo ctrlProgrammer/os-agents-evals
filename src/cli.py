@@ -121,12 +121,23 @@ def stratified(cases: list[Case], limit: int | None, seed: int) -> list[Case]:
     return [case for _, case in sorted(chosen)]
 
 
+def answer_labels(kind: str, prompt: dict) -> list[str] | None:
+    """Valid answers for the invalid-answer count. JEV defaults to its criteria keys."""
+    if "labels" in prompt:
+        return list(prompt["labels"])
+    if kind == "jev" and prompt.get("criteria"):
+        return list(prompt["criteria"])
+    return None
+
+
 def format_row(result) -> str:
     low = round(result.accuracy_ci95[0] * 100)
     high = round(result.accuracy_ci95[1] * 100)
     row = (
         f"{result.model}: {result.accuracy:.0%} (IC {low}-{high}%) exactitud, "
-        f"${result.cost_per_1k:.2f}/1k consultas, p95 {result.p95_latency_s:.2f}s, "
+        f"${result.cost_per_1k:.2f}/1k consultas"
+        + ("" if result.cost_per_1k_correct is None else f", ${result.cost_per_1k_correct:.2f}/1k aciertos")
+        + f", p95 {result.p95_latency_s:.2f}s, "
         f"F1 {result.f1_macro:.2f}"
     )
     if result.confidence_correct is None and result.confidence_wrong is None:
@@ -175,7 +186,9 @@ def main(argv=None) -> None:
     for name in args.models.split(","):
         kind = specs[name].get("type", "fake")
         prompt, prompt_file = load_prompt(dataset, args.prompt, kind) if is_folder and kind != "fake" else ({}, None)
-        result = run_eval(cases, name, build_model(specs[name], prompt), args.workers)
+        result = run_eval(
+            cases, name, build_model(specs[name], prompt), args.workers, answer_labels(kind, prompt)
+        )
         print(format_row(result))
         if is_folder:
             save_result(dataset, result, args.prompt, prompt_file, sample, limited=len(cases) < len(all_cases))
