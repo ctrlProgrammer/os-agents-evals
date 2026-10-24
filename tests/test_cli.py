@@ -3,13 +3,28 @@ import time
 
 import pytest
 
-from cli import main
+from cli import format_row, main
+from runner import EvalResult, wilson
 
 
 def write_prompt(dataset, version, kind, content):
     folder = dataset / "prompts" / version
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{kind}.json").write_text(json.dumps(content))
+
+
+def test_the_row_shows_the_confidence_interval_of_the_accuracy():
+    result = EvalResult(
+        model="jev",
+        accuracy=0.95,
+        cost_per_1k=0.17,
+        p95_latency_s=0.62,
+        cases=40,
+        per_label={},
+        accuracy_ci95=wilson(38, 40),
+    )
+
+    assert format_row(result).startswith("jev: 95% (IC 83-99%) exactitud")
 
 
 def test_run_prints_one_comparison_row_per_model(tmp_path, capsys):
@@ -32,7 +47,7 @@ def test_run_prints_one_comparison_row_per_model(tmp_path, capsys):
 
     main(["run", str(dataset), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 50% exactitud, $0.45/1k consultas, p95 0.10s\n"
+    assert capsys.readouterr().out == "fake: 50% (IC 9-91%) exactitud, $0.45/1k consultas, p95 0.10s\n"
 
 
 def test_run_scores_text_and_image_cases_from_a_dataset_folder(tmp_path, capsys):
@@ -60,7 +75,7 @@ def test_run_scores_text_and_image_cases_from_a_dataset_folder(tmp_path, capsys)
 
     main(["run", str(tmp_path), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 100% exactitud, $0.45/1k consultas, p95 0.10s\n"
+    assert capsys.readouterr().out == "fake: 100% (IC 34-100%) exactitud, $0.45/1k consultas, p95 0.10s\n"
 
 
 def test_run_passes_every_image_when_a_case_has_several(tmp_path, capsys):
@@ -92,7 +107,7 @@ def test_run_passes_every_image_when_a_case_has_several(tmp_path, capsys):
 
     main(["run", str(tmp_path), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 100% exactitud, $0.45/1k consultas, p95 0.10s\n"
+    assert capsys.readouterr().out == "fake: 100% (IC 21-100%) exactitud, $0.45/1k consultas, p95 0.10s\n"
 
 
 def test_jev_uses_the_criteria_of_the_chosen_prompt_version(tmp_path, capsys, monkeypatch):
@@ -134,7 +149,7 @@ def test_jev_uses_the_criteria_of_the_chosen_prompt_version(tmp_path, capsys, mo
           "--prompt", "v2", "--max-evals", "1"])
 
     row = capsys.readouterr().out
-    assert row.startswith("jev: 100% exactitud, $42.00/1k consultas, p95 ")
+    assert row.startswith("jev: 100% (IC 21-100%) exactitud, $42.00/1k consultas, p95 ")
     (body,) = seen
     assert body["state"] == "Publicación.\n\nGPS distinto"
     question = body["questions"]["etiqueta"]
@@ -262,7 +277,7 @@ def test_run_scores_a_gemini_ai_studio_reply(tmp_path, capsys, monkeypatch):
     main(["run", str(tmp_path), "--models", "gemini", "--config", str(config)])
 
     row = capsys.readouterr().out
-    assert row.startswith("gemini: 100% exactitud, $300.00/1k consultas, p95 ")
+    assert row.startswith("gemini: 100% (IC 21-100%) exactitud, $300.00/1k consultas, p95 ")
 
 
 def fake_config(tmp_path, answers):

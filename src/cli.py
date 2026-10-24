@@ -122,8 +122,10 @@ def stratified(cases: list[Case], limit: int | None, seed: int) -> list[Case]:
 
 
 def format_row(result) -> str:
+    low = round(result.accuracy_ci95[0] * 100)
+    high = round(result.accuracy_ci95[1] * 100)
     row = (
-        f"{result.model}: {result.accuracy:.0%} exactitud, "
+        f"{result.model}: {result.accuracy:.0%} (IC {low}-{high}%) exactitud, "
         f"${result.cost_per_1k:.2f}/1k consultas, p95 {result.p95_latency_s:.2f}s"
     )
     if result.confidence_correct is None and result.confidence_wrong is None:

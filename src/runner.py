@@ -22,6 +22,7 @@ class EvalResult:
     confidence_correct: float | None = None
     confidence_wrong: float | None = None
     wall_s: float = 0.0
+    accuracy_ci95: tuple[float, float] = (0.0, 0.0)
 
 
 def normalize(text: str) -> str:
@@ -33,6 +34,19 @@ def cost(completion, price) -> float:
         completion.input_tokens * price.input_per_mtok
         + completion.output_tokens * price.output_per_mtok
     ) / 1_000_000
+
+
+def wilson(hits: int, total: int) -> tuple[float, float]:
+    """95% Wilson interval of hits/total. It stays inside 0 and 1 when the rate is 0 or 1."""
+    if total == 0:
+        return (0.0, 0.0)
+    z = 1.96
+    proportion = hits / total
+    z2 = z * z
+    denominator = 1 + z2 / total
+    center = (proportion + z2 / (2 * total)) / denominator
+    margin = z * math.sqrt(proportion * (1 - proportion) / total + z2 / (4 * total * total)) / denominator
+    return (center - margin, center + margin)
 
 
 def p95(values) -> float:
@@ -72,4 +86,5 @@ def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
         confidence_correct=mean(confidence[True]),
         confidence_wrong=mean(confidence[False]),
         wall_s=wall_s,
+        accuracy_ci95=wilson(hits, len(cases)),
     )
