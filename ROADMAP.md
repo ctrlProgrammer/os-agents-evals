@@ -12,7 +12,7 @@ Reglas para todos los ítems (ver [README](README.md) para lo que ya existe):
 
 | # | Ítem | Fase | Tamaño | Depende de |
 |---|------|------|--------|------------|
-| 1 | Llamadas en paralelo (`--workers`) | Velocidad | M | — |
+| 1 | Llamadas en paralelo (`--workers`) — hecho | Velocidad | M | — |
 | 2 | Muestreo estratificado en `--max-evals` | Muestra confiable | M | — |
 | 3 | Intervalo de confianza de la exactitud | Muestra confiable | S | — |
 | 4 | Matriz de confusión y precisión, recall y F1 por clase | Calidad | M | — |
@@ -24,6 +24,8 @@ Reglas para todos los ítems (ver [README](README.md) para lo que ya existe):
 ## Fase 1. Velocidad
 
 ### 1. Llamadas en paralelo (`--workers N`)
+
+**Estado: hecho.** 40 casos de `freezer` con 8 hilos: Gemini 13 s (antes unos 90 s) y JEV 2,6 s (antes unos 19 s), con la misma exactitud.
 
 **Por qué.** Hoy `run_eval` llama a cada caso en serie. 40 casos tardan cerca de 90 s en Gemini; el dataset `freezer` completo (6675) serían horas.
 
