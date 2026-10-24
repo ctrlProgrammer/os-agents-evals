@@ -1,5 +1,5 @@
-from os_agents_evals.models import FakeModel, Price
-from os_agents_evals.runner import Case, p95, run_eval
+from models import FakeModel, Price
+from runner import Case, p95, run_eval
 
 
 def two_cases():

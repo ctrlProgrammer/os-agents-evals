@@ -2,8 +2,8 @@ import argparse
 import json
 from pathlib import Path
 
-from os_agents_evals.models import FakeModel, Price
-from os_agents_evals.runner import Case, run_eval
+from models import FakeModel, Price
+from runner import Case, run_eval
 
 
 def load_cases(path: Path) -> list[Case]:

@@ -1,6 +1,6 @@
 import json
 
-from os_agents_evals.cli import main
+from cli import main
 
 
 def test_run_prints_one_comparison_row_per_model(tmp_path, capsys):
