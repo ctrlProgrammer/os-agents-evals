@@ -1,0 +1,5 @@
+{
+  "system": "Rol del modelo (opcional).",
+  "instructions": "Lee la entrada y responde únicamente con la etiqueta correcta.",
+  "temperature": 0
+}

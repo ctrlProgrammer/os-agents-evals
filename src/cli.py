@@ -6,7 +6,15 @@ import subprocess
 from dataclasses import replace
 from pathlib import Path
 
-from models import FakeModel, GeminiModel, JevModel, Price
+from models import (
+    DEEPSEEK_URL,
+    AnthropicModel,
+    FakeModel,
+    GeminiModel,
+    JevModel,
+    OpenAIModel,
+    Price,
+)
 from prompts import load_prompt
 from results import require_same_hash, save_result
 from runner import Case, run_eval
@@ -46,11 +54,12 @@ def _only(prompt: dict, keys: tuple[str, ...]) -> dict:
     return {key: prompt[key] for key in keys if key in prompt}
 
 
-def build_model(spec: dict, prompt: dict) -> FakeModel | JevModel | GeminiModel:
-    """Build the model named by spec['type']: fake, jev, or gemini.
+def build_model(spec: dict, prompt: dict) -> FakeModel | JevModel | GeminiModel | OpenAIModel | AnthropicModel:
+    """Build the model named by spec['type'].
 
-    `prompt` is the model's own JSON prompt. JEV needs `criteria`; Gemini takes
-    `system`, `instructions` and `temperature`.
+    `prompt` is that type's JSON file. JEV needs `criteria`. The chat types take
+    `system`, `instructions` and `temperature`. Anthropic also takes `max_tokens`.
+    DeepSeek takes `thinking` (`disabled` when the prompt omits it).
     """
     price = Price(**spec["price"])
     kind = spec.get("type", "fake")
@@ -78,6 +87,29 @@ def build_model(spec: dict, prompt: dict) -> FakeModel | JevModel | GeminiModel:
             price=price,
             api_key=_env_key(spec, "GEMINI_API_KEY"),
             **_only(prompt, ("system", "instructions", "temperature")),
+        )
+    if kind == "openai":
+        return OpenAIModel(
+            model=spec["model"],
+            price=price,
+            api_key=_env_key(spec, "OPENAI_API_KEY"),
+            **_only(prompt, ("system", "instructions", "temperature")),
+        )
+    if kind == "deepseek":
+        return OpenAIModel(
+            model=spec["model"],
+            price=price,
+            api_key=_env_key(spec, "DEEPSEEK_API_KEY"),
+            url=DEEPSEEK_URL,
+            thinking=prompt.get("thinking", "disabled"),
+            **_only(prompt, ("system", "instructions", "temperature")),
+        )
+    if kind == "anthropic":
+        return AnthropicModel(
+            model=spec["model"],
+            price=price,
+            api_key=_env_key(spec, "ANTHROPIC_API_KEY"),
+            **_only(prompt, ("system", "instructions", "temperature", "max_tokens")),
         )
     raise SystemExit(f"unknown model type: {kind}")
 

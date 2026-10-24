@@ -93,7 +93,9 @@ JEV is not a chat model. It scores `state` (then the case text, then the image) 
 
 Every key is optional. `system` goes in `systemInstruction`. The user message is `instructions`, a blank line, then the case text and the images. The reply is text and must equal the label.
 
-`labels` lists the answers that count as valid, for both files. JEV uses its `criteria` keys when `labels` is absent. With no list at all the invalid-answer fields stay `null`.
+`openai.json`, `anthropic.json` and `deepseek.json` use the same keys. Anthropic also reads `max_tokens` (1024 when the file omits it). DeepSeek also reads `thinking`: `disabled` when the file omits it, so the call does not spend a chain of thought. Oxford ships those three files with the same text as `gemini.json`. No run against them is checked in.
+
+`labels` lists the answers that count as valid. JEV uses its `criteria` keys when `labels` is absent. With no list at all the invalid-answer fields stay `null`.
 
 ## Models
 
@@ -102,6 +104,13 @@ Every key is optional. `system` goes in `systemInstruction`. The user message is
 - **fake** returns canned answers. An image answer is keyed by the absolute path.
 - **jev** calls TypeSafe System One, `POST https://api.typesafe.ai/v1/systemone`. `model` defaults to `jev-latest`. Price: $0.042 per million input tokens, output free ([TypeSafe models](https://docs.typesafe.ai/models)). Photos are fitted to JEV's 280–1568 px limit, which needs Pillow (`pip install -e ".[images]"`). Image support is the vendor's opt-in beta. Default key variable: `TYPESAFE_API_KEY`.
 - **gemini** calls the Gemini API on Google AI Studio, `generateContent` at `generativelanguage.googleapis.com`, with the key in `x-goog-api-key`. No project or region. `model` is required. Thinking tokens count as output. Gemini 2.5 Flash text price: $0.30 input and $2.50 output per million ([Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)). Default key variable: `GEMINI_API_KEY`.
+- **openai** calls Chat Completions, `POST https://api.openai.com/v1/chat/completions`, with `Authorization: Bearer`. The default in `models.json` is `gpt-4o-mini` at $0.15 input and $0.60 output per million ([OpenAI pricing](https://developers.openai.com/api/docs/pricing)). Cached input is billed cheaper and is not split out here. Photos go as a data URL. Default key variable: `OPENAI_API_KEY`.
+- **anthropic** calls Messages, `POST https://api.anthropic.com/v1/messages`, with `x-api-key` and `anthropic-version: 2023-06-01`. The default is `claude-haiku-5-5` at $0.10 input and $0.50 output per million, the rate for a prompt up to 100k tokens ([Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing)). A longer prompt costs more. Photos go as base64, before the text. A thinking block is not scored. Default key variable: `ANTHROPIC_API_KEY`.
+- **deepseek** calls the same chat body at `POST https://api.deepseek.com/chat/completions`. The default is `deepseek-flash`. The price in `models.json` is the off-peak cache-miss rate, $0.15 input and $0.60 output per million; peak hours cost double ([DeepSeek pricing](https://api-docs.deepseek.com/quick_start/pricing)). Photos go as a data URL. Default key variable: `DEEPSEEK_API_KEY`.
+
+```bash
+.venv/bin/os-evals run oxford-iiit-pet --models openai,anthropic,deepseek --max-evals 20
+```
 
 ## Results
 
