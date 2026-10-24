@@ -107,10 +107,13 @@ def main(argv=None) -> None:
     run.add_argument("--models", required=True, help="comma-separated model names")
     run.add_argument("--config", type=Path, default=Path("models.json"))
     run.add_argument("--prompt", default="v1", help="prompt version: datasets/<name>/prompts/<version>/<model type>.json")
+    run.add_argument("--workers", type=int, default=1, help="calls to the model made at once")
     run.add_argument("--max-evals", type=int, help="run only this many cases, spread over the dataset")
     args = parser.parse_args(argv)
     if args.max_evals is not None and args.max_evals < 1:
         parser.error("--max-evals must be at least 1")
+    if args.workers < 1:
+        parser.error("--workers must be at least 1")
 
     dataset = args.dataset
     if not (dataset / "dataset.json").is_file() and not dataset.is_file():
@@ -122,7 +125,7 @@ def main(argv=None) -> None:
     for name in args.models.split(","):
         kind = specs[name].get("type", "fake")
         prompt, prompt_file = load_prompt(dataset, args.prompt, kind) if is_folder and kind != "fake" else ({}, None)
-        result = run_eval(cases, name, build_model(specs[name], prompt))
+        result = run_eval(cases, name, build_model(specs[name], prompt), args.workers)
         print(format_row(result))
         if is_folder:
             save_result(dataset, result, args.prompt, prompt_file, limited=len(cases) < len(all_cases))

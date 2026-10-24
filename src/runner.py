@@ -1,4 +1,6 @@
 import math
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 
@@ -19,6 +21,7 @@ class EvalResult:
     per_label: dict
     confidence_correct: float | None = None
     confidence_wrong: float | None = None
+    wall_s: float = 0.0
 
 
 def normalize(text: str) -> str:
@@ -42,8 +45,12 @@ def mean(values) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def run_eval(cases, name, model) -> EvalResult:
-    completions = [model.complete(case.prompt, case.image) for case in cases]
+def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
+    started = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        # map keeps the order of the cases, so every answer stays with its case
+        completions = list(pool.map(lambda case: model.complete(case.prompt, case.image), cases))
+    wall_s = time.perf_counter() - started
     per_label: dict = {}
     confidence = {True: [], False: []}
     for case, completion in zip(cases, completions):
@@ -64,4 +71,5 @@ def run_eval(cases, name, model) -> EvalResult:
         per_label=per_label,
         confidence_correct=mean(confidence[True]),
         confidence_wrong=mean(confidence[False]),
+        wall_s=wall_s,
     )

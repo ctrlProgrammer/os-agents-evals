@@ -1,4 +1,5 @@
 import json
+import time
 
 import pytest
 
@@ -396,3 +397,36 @@ def test_max_evals_below_one_is_rejected(tmp_path):
 
     with pytest.raises(SystemExit):
         main(["run", str(dataset), "--models", "fake", "--config", str(config), "--max-evals", "0"])
+
+
+def test_workers_run_the_calls_at_once_and_the_result_keeps_the_wall_time(tmp_path, monkeypatch):
+    (tmp_path / "dataset.json").write_text(json.dumps([
+        {"type": "text", "text": str(number), "expected": "a"} for number in range(8)
+    ]))
+    write_prompt(tmp_path, "v1", "gemini", {})
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({
+        "gemini": {"type": "gemini", "model": "gemini-2.5-flash",
+                   "price": {"input_per_mtok": 0, "output_per_mtok": 0}}
+    }))
+
+    def poster(url, body, headers):
+        time.sleep(0.2)
+        return {"candidates": [{"content": {"parts": [{"text": "a"}]}}]}
+
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-secret")
+    monkeypatch.setattr("models.post_json", poster)
+
+    main(["run", str(tmp_path), "--models", "gemini", "--config", str(config), "--workers", "4"])
+
+    result = json.loads((tmp_path / "result" / "v1" / "gemini.json").read_text())
+    assert result["accuracy"] == 1.0
+    assert 0.4 <= result["wall_s"] < 1.0
+
+
+def test_workers_below_one_are_rejected(tmp_path):
+    dataset = four_case_dataset(tmp_path)
+    config = fake_config(tmp_path, {})
+
+    with pytest.raises(SystemExit):
+        main(["run", str(dataset), "--models", "fake", "--config", str(config), "--workers", "0"])

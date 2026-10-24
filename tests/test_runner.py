@@ -1,3 +1,5 @@
+import time
+
 from models import Completion, FakeModel, Price
 from runner import Case, p95, run_eval
 
@@ -105,3 +107,37 @@ def test_result_counts_cases_and_hits_per_expected_label():
         "Paris": {"correct": 1, "total": 1},
         "4": {"correct": 0, "total": 1},
     }
+
+
+class SlowModel:
+    """Echoes the prompt after a pause. Earlier cases pause longer, so a mixed-up order shows."""
+
+    price = Price(input_per_mtok=0.0, output_per_mtok=0.0)
+
+    def __init__(self, pause_s):
+        self.pause_s = pause_s
+
+    def complete(self, prompt, image=""):
+        time.sleep(self.pause_s * (8 - int(prompt)) / 8)
+        return Completion(text=prompt, input_tokens=1, output_tokens=1, latency_s=self.pause_s)
+
+
+def numbered_cases(count=8):
+    return [Case(prompt=str(number), expected=str(number)) for number in range(count)]
+
+
+def test_workers_overlap_the_calls_and_keep_every_answer_with_its_case():
+    sequential = run_eval(numbered_cases(), "slow", SlowModel(0.2), workers=1)
+
+    parallel = run_eval(numbered_cases(), "slow", SlowModel(0.2), workers=4)
+
+    assert parallel.accuracy == 1.0
+    assert parallel.per_label == sequential.per_label
+    assert list(parallel.per_label) == [str(number) for number in range(8)]
+    assert parallel.wall_s < sequential.wall_s / 2
+
+
+def test_result_reports_the_wall_time_of_the_run():
+    result = run_eval(numbered_cases(2), "slow", SlowModel(0.1))
+
+    assert result.wall_s >= 0.1
