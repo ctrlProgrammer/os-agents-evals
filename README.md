@@ -2,7 +2,7 @@
 
 CLI that runs one dataset against several models and compares accuracy, cost and latency. Each model gets its own JSON prompt, so JEV and a normal chat model are not forced through the same text.
 
-Two public datasets are wired up. [Oxford-IIIT Pet](https://www.robots.ox.ac.uk/~vgg/data/pets/) is the one to read first: a photo goes in, the breed name comes out. [MMMU](https://mmmu-benchmark.github.io/) is the other. Freezer and RealsLab stay on disk only. Their cases and photos are not in git.
+[Oxford-IIIT Pet](https://www.robots.ox.ac.uk/~vgg/data/pets/) is the worked example: a photo goes in, the breed name comes out. Cases and photos stay out of git.
 
 ## Oxford-IIIT Pet
 
@@ -29,10 +29,6 @@ The run checked in under `datasets/oxford-iiit-pet/result/v0/` is from 23 Oct 20
 | Misses | american bulldog, Egyptian Mau | Egyptian Mau |
 
 The result files are `jev-n20.json` and `gemini-2.5-flash-api-n20.json`. That run does not carry the interval, F1 or JEV's confidence. A run today prints those too.
-
-## MMMU
-
-[MMMU](https://mmmu-benchmark.github.io/) validation: a question about one or more images. Some answers are a letter (`A`), some are a short string, so the prompt does not lock Gemini to a label list. JEV's prompt only offers `A` through `E`, and a free-form answer is outside that list. No scored run is checked in yet.
 
 ## Run
 
@@ -65,7 +61,7 @@ That line is what the CLI would print for the JEV column above. The checked-in J
 | `--max-evals N` | all | About the same number of cases from each class. A class smaller than its share gives every case it has and the rest is shared again. |
 | `--seed 7` | `7` | Repeats that pick. |
 | `--no-stratified` | off | The older even spread, which can skip a rare class. |
-| `--workers N` | `1` | Calls in flight at once. 500 `freezer` cases took 29 s on JEV and 156 s on Gemini with 8 workers. A 429, 500, 502, 503, 504 or a timeout is tried 3 times, one second apart. If it still fails, that case is an error and the run continues. |
+| `--workers N` | `1` | Calls in flight at once. A 429, 500, 502, 503, 504 or a timeout is tried 3 times, one second apart. If it still fails, that case is an error and the run continues. |
 
 ## Dataset
 
@@ -73,7 +69,7 @@ That line is what the CLI would print for the JEV column above. The checked-in J
 
 A case is `{"type": "text", "text", "expected"}` or `{"type": "image", "path", "expected"}`. `path` is relative to the dataset folder. Several images are a list and travel as bytes only: the file name is never sent, because it can carry the answer (`Abyssinian_201.jpg`).
 
-`meta` is optional and does not change the score. `{"tipo": "nevera", "marca": "hit"}` is counted under `per_group`.
+`meta` is optional and does not change the score. When a case has it, each key is counted under `per_group`.
 
 Scoring is an exact match after stripping spaces and lowercasing. `A` matches `a`. `A. because...` does not.
 
@@ -84,7 +80,7 @@ Scoring is an exact match after stripping spaces and lowercasing. `A` matches `a
 `jev.json`:
 
 ```json
-{"state": "Foto de un equipo de frío.", "instructions": "Qué mueble es?", "criteria": {"nevera/hit": "Nevera verde con el logo Hit."}}
+{"state": "Foto de una mascota.", "instructions": "Qué raza es la mascota de la foto?", "criteria": {"Abyssinian": null, "Siamese": null}}
 ```
 
 JEV is not a chat model. It scores `state` (then the case text, then the image) against one Choice question. `criteria` is required. Its keys are the only answers JEV can give, and each value is that label's definition (`null` when the name is enough). The reply is the chosen key, plus a confidence from 0 to 1.
@@ -92,12 +88,12 @@ JEV is not a chat model. It scores `state` (then the case text, then the image) 
 `gemini.json`:
 
 ```json
-{"system": "Eres un clasificador.", "instructions": "Responde solo con la etiqueta.", "temperature": 0, "labels": ["nunca", "hit"]}
+{"instructions": "Reply with only one breed name.", "temperature": 0, "labels": ["Abyssinian", "Siamese"]}
 ```
 
 Every key is optional. `system` goes in `systemInstruction`. The user message is `instructions`, a blank line, then the case text and the images. The reply is text and must equal the label.
 
-`labels` lists the answers that count as valid, for both files. JEV uses its `criteria` keys when `labels` is absent. With no list at all the invalid-answer fields stay `null`. `mmmu` leaves it off because some answers are not from a fixed list.
+`labels` lists the answers that count as valid, for both files. JEV uses its `criteria` keys when `labels` is absent. With no list at all the invalid-answer fields stay `null`.
 
 ## Models
 
@@ -125,13 +121,6 @@ The file also keeps:
 - `confidence_correct`, `confidence_wrong`, and `by_confidence` at 0.5, 0.7, 0.9, 0.95 and 0.99 (`coverage` and `accuracy`). `null` when the model reports no confidence
 - `per_group`: for each `meta` key, `correct` and `total` per value. `{}` when no case has `meta`
 - `sample`: `{strategy, seed}`. `seed` is `null` for `--no-stratified`
-
-## Local datasets
-
-These folders are in the tree. The cases and photos are not.
-
-- **freezer**. 6,675 photos, 10 labels `tipo/marca`: `nevera/{cocacola, postobon, colombiana, gatorade, hit, redbull, sinmarca}` and `congelador/{cremhelado, colombina, sinmarca}`. Each case has `meta.tipo` and `meta.marca`. Kept only rows whose source category and brand match the folder. Dropped the `review` folder, one file name that had two labels, and 41 manifest rows missing from the source. `sinmarca` was labeled by JEV while relabeling `generico`, so a JEV hit there partly grades JEV on its own labels. Photos are flat in `images/`.
-- **realslab**. Listing audit: `ok`, `fraude`, `error_tipeo`, `anomalia_datos`.
 
 ## Tests
 

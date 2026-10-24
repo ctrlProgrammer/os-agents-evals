@@ -9,9 +9,11 @@ __pycache__/
 
 # Dataset contents stay local. The folder, datasets/_template and each
 # dataset's prompts/ and result/ (no case data) stay in git.
+# datasets/freezer/ stays on disk, prompts and results included.
 datasets/*/*
 !datasets/_template/**
 !datasets/*/prompts/
 !datasets/*/prompts/**
 !datasets/*/result/
 !datasets/*/result/**
+datasets/freezer/
