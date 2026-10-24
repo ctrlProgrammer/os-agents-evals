@@ -13,8 +13,8 @@ Reglas para todos los ítems (ver [README](README.md) para lo que ya existe):
 | # | Ítem | Fase | Tamaño | Depende de |
 |---|------|------|--------|------------|
 | 1 | Llamadas en paralelo (`--workers`) — hecho | Velocidad | M | — |
-| 2 | Muestreo estratificado en `--max-evals` | Muestra confiable | M | — |
-| 3 | Intervalo de confianza de la exactitud | Muestra confiable | S | — |
+| 2 | Muestreo estratificado en `--max-evals` — hecho | Muestra confiable | M | — |
+| 3 | Intervalo de confianza de la exactitud — hecho | Muestra confiable | S | — |
 | 4 | Matriz de confusión y precisión, recall y F1 por clase | Calidad | M | — |
 | 5 | Tasa de respuestas inválidas | Calidad | S | — |
 | 6 | Exactitud por umbral de confianza | Calidad | M | 1 (para tener casos suficientes) |
@@ -42,9 +42,11 @@ Reglas para todos los ítems (ver [README](README.md) para lo que ya existe):
 
 ### 2. Muestreo estratificado en `--max-evals`
 
-**Por qué.** El muestreo actual es uniforme: en 40 casos de `freezer` no salieron `hit`, `redbull` ni `congelador/sinmarca`, así que esas clases no se miden.
+**Estado: hecho.** Es el muestreo por defecto. `--no-stratified` conserva el espaciado uniforme y `--seed` (por defecto 7) repite la selección. El resultado guarda `sample`.
 
-**Qué.** `--sample stratified` (nuevo valor por defecto) toma casi la misma cantidad por clase, con `--seed` (por defecto 7) para repetirlo. Una clase con menos casos que su cuota entrega todos los que tiene y el resto se reparte entre las demás. `--sample spread` conserva el muestreo actual. El resultado guarda `sample: {"strategy", "seed"}`, porque dos corridas con muestras distintas no son comparables.
+**Por qué.** El muestreo anterior es uniforme: en 40 casos de `freezer` no salieron `hit`, `redbull` ni `congelador/sinmarca`, así que esas clases no se miden.
+
+**Qué.** Toma casi la misma cantidad por clase. Una clase con menos casos que su cuota entrega todos los que tiene y el resto se reparte entre las demás.
 
 **Ejemplo.**
 - Given un dataset con 10 casos de A, 10 de B y 10 de C.
@@ -54,6 +56,8 @@ Reglas para todos los ítems (ver [README](README.md) para lo que ya existe):
 Otro ejemplo: con A de 50 casos, B de 50 y C de 1, `--max-evals 6` toma 1 de C y reparte los otros 5 entre A y B.
 
 ### 3. Intervalo de confianza de la exactitud
+
+**Estado: hecho.** La fila muestra `95% (IC 83-99%)` y el resultado guarda `accuracy_ci95`.
 
 **Por qué.** Con 40 casos, un caso son 2,5 puntos. "95% contra 97,5%" no dice nada sin un margen.
 
