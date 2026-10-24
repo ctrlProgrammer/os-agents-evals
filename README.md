@@ -94,7 +94,7 @@ The file also keeps:
 
 ## Datasets
 
-- **freezer**. 6675 photos, 10 labels `tipo/marca`: `nevera/{cocacola, postobon, colombiana, gatorade, hit, redbull, sinmarca}` and `congelador/{cremhelado, colombina, sinmarca}`. Each case has `meta.tipo` and `meta.marca`. Source: `gs://harmony-ml-training/freezer/datasets/cold-equipment`, read with the default gcloud config. Kept only rows whose source category and brand match the folder. Dropped the `review` folder, one file name that had two labels, and 41 manifest rows missing from the bucket. `sinmarca` was labeled by JEV while relabeling `generico`, so a JEV hit there partly grades JEV on its own labels. Photos are flat in `images/`.
+- **freezer**. 6675 photos, 10 labels `tipo/marca`: `nevera/{cocacola, postobon, colombiana, gatorade, hit, redbull, sinmarca}` and `congelador/{cremhelado, colombina, sinmarca}`. Each case has `meta.tipo` and `meta.marca`. Kept only rows whose source category and brand match the folder. Dropped the `review` folder, one file name that had two labels, and 41 manifest rows missing from the source. `sinmarca` was labeled by JEV while relabeling `generico`, so a JEV hit there partly grades JEV on its own labels. Photos are flat in `images/`.
 - **oxford-iiit-pet**. 37 breeds, official test split.
 - **mmmu**. Validation split. Answers are not a fixed list, so the prompt has no `labels`.
 - **realslab**. Listing audit: `ok`, `fraude`, `error_tipeo`, `anomalia_datos`.
