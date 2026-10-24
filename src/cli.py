@@ -8,7 +8,7 @@ from pathlib import Path
 
 from models import FakeModel, GeminiModel, JevModel, Price
 from prompts import load_prompt
-from results import save_result
+from results import require_same_hash, save_result
 from runner import Case, run_eval
 
 
@@ -207,6 +207,8 @@ def main(argv=None) -> None:
         spec = specs[name]
         kind = spec.get("type", "fake")
         prompt, prompt_file = load_prompt(dataset, args.prompt, kind) if is_folder and kind != "fake" else ({}, None)
+        if is_folder:
+            require_same_hash(dataset, args.prompt, prompt_file)
         result = run_eval(
             cases, name, build_model(spec, prompt), args.workers, answer_labels(kind, prompt)
         )

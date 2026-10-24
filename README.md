@@ -77,7 +77,7 @@ Every key is optional. `system` goes in `systemInstruction`. The user message is
 
 A run writes `datasets/<name>/result/<version>/<model>.json`. `result/v2/jev.json` is the output of `prompts/v2/jev.json`. A finished rerun of the same version and model replaces the file. An incomplete one writes `<model>.incomplete.json` and leaves the finished file in place. `--max-evals N` writes `<model>-n<N>.json` beside it and never replaces the full run. `v0/` holds the runs from before prompts were versioned.
 
-`hash` is the first 8 hex characters of the SHA-256 of the prompt file followed by `dataset.json`. If two runs of the same version have a different hash, the prompt or the cases were edited in place. Bump the version instead.
+`hash` is the first 8 hex characters of the SHA-256 of the prompt file followed by `dataset.json`. If a result for that same prompt is already in the version folder with a different hash, the run stops before any model call. Bump `--prompt` to a new version. JEV and Gemini use different prompt files, so their hashes are allowed to differ. The image bytes are not part of the hash.
 
 The file also keeps:
 

@@ -18,6 +18,28 @@ def content_hash(folder: Path, prompt_file: Path | None) -> str:
     return digest.hexdigest()[:VERSION_LENGTH]
 
 
+def require_same_hash(folder: Path, version: str, prompt_file: Path | None) -> None:
+    """Stop when this version already holds a result for the same prompt with another hash.
+
+    JEV and Gemini keep different prompt files, so their hashes are not compared.
+    """
+    directory = folder / "result" / version
+    if not directory.is_dir():
+        return
+    new_hash = content_hash(folder, prompt_file)
+    prompt = prompt_file.relative_to(folder).as_posix() if prompt_file else None
+    for path in sorted(directory.glob("*.json")):
+        saved = json.loads(path.read_text())
+        if saved.get("prompt") != prompt:
+            continue
+        old = saved.get("hash")
+        if old and old != new_hash:
+            raise SystemExit(
+                f"prompt version {version} already has results with hash {old}; "
+                f"this run is {new_hash}. Bump --prompt to a new version."
+            )
+
+
 def save_result(
     folder: Path,
     result,

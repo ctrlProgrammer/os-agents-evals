@@ -571,6 +571,69 @@ def test_git_commit_is_empty_when_git_fails(monkeypatch):
     assert git_commit() is None
 
 
+def test_a_different_hash_for_the_same_prompt_stops_before_the_model(tmp_path, monkeypatch):
+    dataset = tmp_path / "pets"
+    dataset.mkdir()
+    (dataset / "dataset.json").write_text(json.dumps([
+        {"type": "text", "text": "2 + 2?", "expected": "4"},
+    ]))
+    write_prompt(dataset, "v1", "gemini", {"instructions": "Name it."})
+    folder = dataset / "result" / "v1"
+    folder.mkdir(parents=True)
+    (folder / "gemini-n100.json").write_text(json.dumps({
+        "prompt": "prompts/v1/gemini.json",
+        "hash": "bbbbbbbb",
+    }))
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({
+        "gemini": {"type": "gemini", "model": "gemini-2.5-flash",
+                   "price": {"input_per_mtok": 0, "output_per_mtok": 0}}
+    }))
+    calls = {"n": 0}
+
+    def poster(url, body, headers):
+        calls["n"] += 1
+        return {"candidates": [{"content": {"parts": [{"text": "4"}]}}]}
+
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-secret")
+    monkeypatch.setattr("models.post_json", poster)
+
+    with pytest.raises(SystemExit, match="Bump --prompt"):
+        main(["run", str(dataset), "--models", "gemini", "--config", str(config)])
+    assert calls["n"] == 0
+
+
+def test_a_different_hash_for_another_prompt_does_not_stop_the_run(tmp_path, monkeypatch):
+    dataset = tmp_path / "pets"
+    dataset.mkdir()
+    (dataset / "dataset.json").write_text(json.dumps([
+        {"type": "text", "text": "2 + 2?", "expected": "4"},
+    ]))
+    write_prompt(dataset, "v1", "gemini", {"instructions": "Name it."})
+    write_prompt(dataset, "v1", "jev", {"criteria": {"4": None}})
+    folder = dataset / "result" / "v1"
+    folder.mkdir(parents=True)
+    (folder / "jev-n100.json").write_text(json.dumps({
+        "prompt": "prompts/v1/jev.json",
+        "hash": "aaaaaaaa",
+    }))
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({
+        "gemini": {"type": "gemini", "model": "gemini-2.5-flash",
+                   "price": {"input_per_mtok": 0, "output_per_mtok": 0}}
+    }))
+
+    def poster(url, body, headers):
+        return {"candidates": [{"content": {"parts": [{"text": "4"}]}}]}
+
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-secret")
+    monkeypatch.setattr("models.post_json", poster)
+
+    main(["run", str(dataset), "--models", "gemini", "--config", str(config)])
+
+    assert json.loads((dataset / "result" / "v1" / "gemini.json").read_text())["accuracy"] == 1.0
+
+
 def test_a_failed_case_is_saved_beside_the_good_result(tmp_path, monkeypatch, capsys):
     dataset = tmp_path / "pets"
     dataset.mkdir()
