@@ -20,7 +20,12 @@ def load_cases(path: Path) -> list[Case]:
             paths = raw_path if isinstance(raw_path, list) else [raw_path]
             # shortcut: several images travel as one newline-joined path, split when a vision client opens them
             image = "\n".join(str((path / item_path).resolve()) for item_path in paths) if item["type"] == "image" else ""
-            cases.append(Case(prompt=prompt, expected=item["expected"], image=image))
+            cases.append(Case(
+                prompt=prompt,
+                expected=item["expected"],
+                image=image,
+                meta=item.get("meta") or {},
+            ))
         return cases
     lines = path.read_text().splitlines()
     return [Case(**json.loads(line)) for line in lines if line.strip()]

@@ -2,7 +2,8 @@
   {
     "type": "text",
     "text": "Texto que el modelo debe leer.",
-    "expected": "etiqueta"
+    "expected": "etiqueta",
+    "meta": {"grupo": "valor"}
   },
   {
     "type": "image",

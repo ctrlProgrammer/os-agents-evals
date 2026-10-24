@@ -342,6 +342,27 @@ def fake_config(tmp_path, answers):
     return config
 
 
+def test_a_case_meta_is_counted_in_the_saved_groups(tmp_path):
+    dataset = tmp_path / "pets"
+    dataset.mkdir()
+    (dataset / "dataset.json").write_text(json.dumps([
+        {"type": "text", "text": "uno", "expected": "a", "meta": {"tipo": "nevera"}},
+        {"type": "text", "text": "dos", "expected": "a", "meta": {"tipo": "nevera"}},
+        {"type": "text", "text": "tres", "expected": "b", "meta": {"tipo": "congelador"}},
+    ]))
+    config = fake_config(tmp_path, {"uno": "a", "tres": "b"})
+
+    main(["run", str(dataset), "--models", "fake", "--config", str(config)])
+
+    result = json.loads((dataset / "result" / "v1" / "fake.json").read_text())
+    assert result["per_group"] == {
+        "tipo": {
+            "nevera": {"correct": 1, "total": 2},
+            "congelador": {"correct": 1, "total": 1},
+        }
+    }
+
+
 def test_run_saves_the_metrics_under_result_in_the_dataset_folder(tmp_path):
     dataset = tmp_path / "pets"
     dataset.mkdir()

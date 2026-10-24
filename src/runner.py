@@ -9,6 +9,7 @@ class Case:
     prompt: str
     expected: str
     image: str = ""
+    meta: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,7 @@ class EvalResult:
     invalid_samples: list | None = None
     cost_per_1k_correct: float | None = None
     by_confidence: list | None = None
+    per_group: dict = field(default_factory=dict)
 
 
 CONFIDENCE_THRESHOLDS = (0.5, 0.7, 0.9, 0.95, 0.99)
@@ -111,6 +113,7 @@ def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = No
         known.setdefault(normalize(case.expected), case.expected)
     per_label: dict = {}
     confusion: dict = {}
+    per_group: dict = {}
     confidence = {True: [], False: []}
     scored = []
     for case, completion in zip(cases, completions):
@@ -122,6 +125,10 @@ def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = No
         counts["total"] += 1
         counts["correct"] += hit
         scored.append((completion.confidence, bool(hit)))
+        for key, value in case.meta.items():
+            group = per_group.setdefault(key, {}).setdefault(str(value), {"correct": 0, "total": 0})
+            group["total"] += 1
+            group["correct"] += hit
         if completion.confidence is not None:
             confidence[hit].append(completion.confidence)
     predicted_totals: dict = {}
@@ -157,4 +164,5 @@ def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = No
         invalid_samples=invalid_samples,
         cost_per_1k_correct=None if hits == 0 else total_cost / hits * 1000,
         by_confidence=confidence_table(scored),
+        per_group=per_group,
     )

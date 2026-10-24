@@ -19,7 +19,7 @@ Reglas para todos los ítems (ver [README](README.md) para lo que ya existe):
 | 5 | Tasa de respuestas inválidas — hecho | Calidad | S | — |
 | 6 | Exactitud por umbral de confianza — hecho | Calidad | M | 1 (para tener casos suficientes) |
 | 7 | Costo por acierto — hecho | Costo | S | — |
-| 8 | Exactitud por grupo | Costo y agrupación | M | — |
+| 8 | Exactitud por grupo — hecho | Costo y agrupación | M | — |
 
 ## Fase 1. Velocidad
 
@@ -131,6 +131,8 @@ Otro ejemplo: con A de 50 casos, B de 50 y C de 1, `--max-evals 6` toma 1 de C y
 - Then `cost_per_1k_correct` es 0,9.
 
 ### 8. Exactitud por grupo
+
+**Estado: hecho.** Un caso puede traer `meta`. El resultado guarda `per_group`. El acierto parcial, acertar el tipo aunque falle la marca, queda fuera.
 
 **Por qué.** En `freezer` interesa saber si un modelo falla más en `nevera` que en `congelador`, o en una marca, sin leer la lista entera de etiquetas.
 
