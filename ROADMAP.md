@@ -16,9 +16,9 @@ Reglas para todos los ítems (ver [README](README.md) para lo que ya existe):
 | 2 | Muestreo estratificado en `--max-evals` — hecho | Muestra confiable | M | — |
 | 3 | Intervalo de confianza de la exactitud — hecho | Muestra confiable | S | — |
 | 4 | Matriz de confusión y precisión, recall y F1 por clase — hecho | Calidad | M | — |
-| 5 | Tasa de respuestas inválidas | Calidad | S | — |
-| 6 | Exactitud por umbral de confianza | Calidad | M | 1 (para tener casos suficientes) |
-| 7 | Costo por acierto | Costo | S | — |
+| 5 | Tasa de respuestas inválidas — hecho | Calidad | S | — |
+| 6 | Exactitud por umbral de confianza — hecho | Calidad | M | 1 (para tener casos suficientes) |
+| 7 | Costo por acierto — hecho | Costo | S | — |
 | 8 | Exactitud por grupo | Costo y agrupación | M | — |
 
 ## Fase 1. Velocidad
