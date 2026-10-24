@@ -50,7 +50,7 @@ def test_run_prints_one_comparison_row_per_model(tmp_path, capsys):
 
     main(["run", str(dataset), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 50% (IC 9-91%) exactitud, $0.45/1k consultas, p95 0.10s, F1 0.50\n"
+    assert capsys.readouterr().out == "fake: 50% (IC 9-91%) exactitud, $0.45/1k consultas, $0.90/1k aciertos, p95 0.10s, F1 0.50\n"
 
 
 def test_run_scores_text_and_image_cases_from_a_dataset_folder(tmp_path, capsys):
@@ -78,7 +78,7 @@ def test_run_scores_text_and_image_cases_from_a_dataset_folder(tmp_path, capsys)
 
     main(["run", str(tmp_path), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 100% (IC 34-100%) exactitud, $0.45/1k consultas, p95 0.10s, F1 1.00\n"
+    assert capsys.readouterr().out == "fake: 100% (IC 34-100%) exactitud, $0.45/1k consultas, $0.45/1k aciertos, p95 0.10s, F1 1.00\n"
 
 
 def test_run_passes_every_image_when_a_case_has_several(tmp_path, capsys):
@@ -110,7 +110,7 @@ def test_run_passes_every_image_when_a_case_has_several(tmp_path, capsys):
 
     main(["run", str(tmp_path), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 100% (IC 21-100%) exactitud, $0.45/1k consultas, p95 0.10s, F1 1.00\n"
+    assert capsys.readouterr().out == "fake: 100% (IC 21-100%) exactitud, $0.45/1k consultas, $0.45/1k aciertos, p95 0.10s, F1 1.00\n"
 
 
 def test_jev_uses_the_criteria_of_the_chosen_prompt_version(tmp_path, capsys, monkeypatch):
@@ -152,7 +152,7 @@ def test_jev_uses_the_criteria_of_the_chosen_prompt_version(tmp_path, capsys, mo
           "--prompt", "v2", "--max-evals", "1"])
 
     row = capsys.readouterr().out
-    assert row.startswith("jev: 100% (IC 21-100%) exactitud, $42.00/1k consultas, p95 ")
+    assert row.startswith("jev: 100% (IC 21-100%) exactitud, $42.00/1k consultas, $42.00/1k aciertos, p95 ")
     (body,) = seen
     assert body["state"] == "Publicación.\n\nGPS distinto"
     question = body["questions"]["etiqueta"]
@@ -280,7 +280,7 @@ def test_run_scores_a_gemini_ai_studio_reply(tmp_path, capsys, monkeypatch):
     main(["run", str(tmp_path), "--models", "gemini", "--config", str(config)])
 
     row = capsys.readouterr().out
-    assert row.startswith("gemini: 100% (IC 21-100%) exactitud, $300.00/1k consultas, p95 ")
+    assert row.startswith("gemini: 100% (IC 21-100%) exactitud, $300.00/1k consultas, $300.00/1k aciertos, p95 ")
     assert json.loads((tmp_path / "result" / "v1" / "gemini.json").read_text())["invalid_rate"] is None
 
 

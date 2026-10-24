@@ -40,6 +40,19 @@ def test_accuracy_is_share_of_exact_matches_ignoring_case_and_spaces():
     assert result.accuracy == 0.5
 
 
+def test_cost_per_hit_spreads_the_total_cost_over_the_hits_only():
+    result = run_eval(two_cases(), "fake", fake({"Capital of France?": "Paris", "2 + 2?": "5"}))
+
+    assert round(result.cost_per_1k, 6) == 0.45
+    assert round(result.cost_per_1k_correct, 6) == 0.9
+
+
+def test_cost_per_hit_is_empty_when_nothing_is_right():
+    result = run_eval(two_cases(), "fake", fake({}))
+
+    assert result.cost_per_1k_correct is None
+
+
 def test_cost_per_1k_queries_comes_from_tokens_and_price_per_mtok():
     model = fake({})
 

@@ -28,6 +28,7 @@ class EvalResult:
     invalid_count: int | None = None
     invalid_rate: float | None = None
     invalid_samples: list | None = None
+    cost_per_1k_correct: float | None = None
 
 
 def normalize(text: str) -> str:
@@ -133,4 +134,5 @@ def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = No
         invalid_count=invalid_count,
         invalid_rate=invalid_rate,
         invalid_samples=invalid_samples,
+        cost_per_1k_correct=None if hits == 0 else total_cost / hits * 1000,
     )

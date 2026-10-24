@@ -135,7 +135,9 @@ def format_row(result) -> str:
     high = round(result.accuracy_ci95[1] * 100)
     row = (
         f"{result.model}: {result.accuracy:.0%} (IC {low}-{high}%) exactitud, "
-        f"${result.cost_per_1k:.2f}/1k consultas, p95 {result.p95_latency_s:.2f}s, "
+        f"${result.cost_per_1k:.2f}/1k consultas"
+        + ("" if result.cost_per_1k_correct is None else f", ${result.cost_per_1k_correct:.2f}/1k aciertos")
+        + f", p95 {result.p95_latency_s:.2f}s, "
         f"F1 {result.f1_macro:.2f}"
     )
     if result.confidence_correct is None and result.confidence_wrong is None:
