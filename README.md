@@ -31,7 +31,7 @@ jev: 94% (IC 91-95%) exactitud, $0.17/1k consultas, $0.19/1k aciertos, p95 0.85s
 | `--max-evals N` | all | About the same number of cases from each class. A class smaller than its share gives every case it has and the rest is shared again. |
 | `--seed 7` | `7` | Repeats that pick. |
 | `--no-stratified` | off | The older even spread, which can skip a rare class. |
-| `--workers N` | `1` | Calls in flight at once. 500 `freezer` cases took 29 s on JEV and 156 s on Gemini with 8 workers. A rate limit answers 429 and stops the run, so raise it step by step. |
+| `--workers N` | `1` | Calls in flight at once. 500 `freezer` cases took 29 s on JEV and 156 s on Gemini with 8 workers. A 429, 500, 502, 503, 504 or a timeout is tried 3 times, one second apart. If it still fails, that case is an error and the run continues. |
 
 ## Dataset
 
@@ -75,13 +75,15 @@ Every key is optional. `system` goes in `systemInstruction`. The user message is
 
 ## Results
 
-A run writes `datasets/<name>/result/<version>/<model>.json`. `result/v2/jev.json` is the output of `prompts/v2/jev.json`. A rerun of the same version and model replaces the file. `--max-evals N` writes `<model>-n<N>.json` beside it and never replaces the full run. `v0/` holds the runs from before prompts were versioned.
+A run writes `datasets/<name>/result/<version>/<model>.json`. `result/v2/jev.json` is the output of `prompts/v2/jev.json`. A finished rerun of the same version and model replaces the file. An incomplete one writes `<model>.incomplete.json` and leaves the finished file in place. `--max-evals N` writes `<model>-n<N>.json` beside it and never replaces the full run. `v0/` holds the runs from before prompts were versioned.
 
-`hash` is the first 8 hex characters of the SHA-256 of the prompt file followed by `dataset.json`. If two runs of the same version have a different hash, the prompt or the cases were edited in place. Bump the version instead.
+`hash` is the first 8 hex characters of the SHA-256 of the prompt file followed by `dataset.json`. If a result for that same prompt is already in the version folder with a different hash, the run stops before any model call. Bump `--prompt` to a new version. JEV and Gemini use different prompt files, so their hashes are allowed to differ. The image bytes are not part of the hash.
 
 The file also keeps:
 
+- `engine`, the `model` string from `models.json` (`null` for `fake`), `price` as copied from that file, and `commit`, the git HEAD of the directory you ran from (`null` when git is not available)
 - `accuracy`, `accuracy_ci95`, `f1_macro`, `cases`, `wall_s`, `p95_latency_s`
+- `complete`, `errors`, `error_samples`. A case that still fails after the retries, a missing photo, or a Gemini reply with no text counts as an error, not as a wrong answer. Accuracy, cost and the interval are over the cases that answered. `cases` stays the number tried. An incomplete run is written to `<model>.incomplete.json` (or `<model>-n<N>.incomplete.json`) and does not replace a finished result. The printed row ends with `incompleta`.
 - `cost_per_1k`, `cost_per_1k_correct` (`null` when nothing is right)
 - `per_label`: `correct`, `total`, `precision`, `recall`, `f1` for each expected label
 - `confusion`: for each expected label, the answers given. An answer that matches none of them is `(otra)`

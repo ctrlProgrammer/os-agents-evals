@@ -1,6 +1,6 @@
 import time
 
-from models import Completion, FakeModel, Price
+from models import Completion, FakeModel, GeminiModel, Price
 from runner import Case, p95, run_eval, wilson
 
 
@@ -278,3 +278,65 @@ def test_result_reports_the_wall_time_of_the_run():
     result = run_eval(numbered_cases(2), "slow", SlowModel(0.1))
 
     assert result.wall_s >= 0.1
+
+
+class FlakyModel:
+    """The case 'bad' fails; every other case answers 4."""
+
+    price = Price(input_per_mtok=3.0, output_per_mtok=15.0)
+
+    def complete(self, prompt, image=""):
+        if prompt == "bad":
+            raise RuntimeError("model request failed with HTTP 429")
+        return Completion(text="4", input_tokens=100, output_tokens=10, latency_s=0.1)
+
+
+def test_a_failed_case_is_recorded_and_the_other_cases_still_score():
+    cases = [Case(prompt="bad", expected="4"), Case(prompt="ok", expected="4")]
+
+    result = run_eval(cases, "jev", FlakyModel(), workers=2)
+
+    assert result.complete is False
+    assert result.errors == 1
+    assert result.error_samples == ["model request failed with HTTP 429"]
+    assert result.cases == 2
+    assert result.accuracy == 1.0
+    assert result.per_label == {"4": {"correct": 1, "total": 1, "precision": 1.0, "recall": 1.0, "f1": 1.0}}
+
+
+def test_a_run_where_every_case_fails_scores_nothing():
+    result = run_eval([Case(prompt="bad", expected="4")], "jev", FlakyModel())
+
+    assert result.complete is False
+    assert result.errors == 1
+    assert result.accuracy == 0.0
+    assert result.cases == 1
+    assert result.cost_per_1k == 0.0
+    assert result.per_label == {}
+
+
+def test_a_missing_photo_is_an_error_and_the_other_case_still_scores(monkeypatch, tmp_path):
+    def poster(url, body, headers):
+        return {"candidates": [{"content": {"parts": [{"text": "a"}]}}]}
+
+    monkeypatch.setattr("models.post_json", poster)
+    model = GeminiModel(model="gemini-2.5-flash", price=Price(0, 0), api_key="k")
+    cases = [
+        Case(prompt="", expected="a", image=str(tmp_path / "gone.jpg")),
+        Case(prompt="good", expected="a"),
+    ]
+
+    result = run_eval(cases, "gemini", model)
+
+    assert result.complete is False
+    assert result.errors == 1
+    assert result.accuracy == 1.0
+    assert "gone.jpg" in result.error_samples[0]
+
+
+def test_a_labeled_run_where_every_case_fails_still_finishes():
+    result = run_eval([Case(prompt="bad", expected="4")], "jev", FlakyModel(), labels=["4"])
+
+    assert result.complete is False
+    assert result.invalid_count == 0
+    assert result.invalid_rate == 0.0

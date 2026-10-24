@@ -32,6 +32,35 @@ class EvalResult:
     cost_per_1k_correct: float | None = None
     by_confidence: list | None = None
     per_group: dict = field(default_factory=dict)
+    complete: bool = True
+    errors: int = 0
+    error_samples: list = field(default_factory=list)
+    engine: str | None = None
+    price: dict | None = None
+    commit: str | None = None
+
+
+def answered_cases(cases, outcomes):
+    """Split a run into scored cases and up to three error texts."""
+    scored = []
+    samples = []
+    errors = 0
+    for case, (completion, error) in zip(cases, outcomes):
+        if error is None:
+            scored.append((case, completion))
+            continue
+        errors += 1
+        if len(samples) < 3:
+            samples.append(str(error).strip())
+    return scored, errors, samples
+
+
+def call_case(model, case):
+    """One case. A failure stays with that case so the rest of the run continues."""
+    try:
+        return model.complete(case.prompt, case.image), None
+    except Exception as error:
+        return None, error
 
 
 CONFIDENCE_THRESHOLDS = (0.5, 0.7, 0.9, 0.95, 0.99)
@@ -63,6 +92,8 @@ def wilson(hits: int, total: int) -> tuple[float, float]:
 
 def p95(values) -> float:
     ordered = sorted(values)
+    if not ordered:
+        return 0.0
     return ordered[math.ceil(0.95 * len(ordered)) - 1]
 
 
@@ -90,6 +121,8 @@ def invalid_report(completions, labels: list[str] | None) -> tuple:
     """How many answers are outside `labels`. None when the run has no label list."""
     if labels is None:
         return None, None, None
+    if not completions:
+        return 0, 0.0, []
     valid = {normalize(label) for label in labels}
     samples = []
     count = 0
@@ -106,8 +139,9 @@ def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = No
     started = time.perf_counter()
     with ThreadPoolExecutor(max_workers=workers) as pool:
         # map keeps the order of the cases, so every answer stays with its case
-        completions = list(pool.map(lambda case: model.complete(case.prompt, case.image), cases))
+        outcomes = list(pool.map(lambda case: call_case(model, case), cases))
     wall_s = time.perf_counter() - started
+    scored_cases, errors, error_samples = answered_cases(cases, outcomes)
     known = {}
     for case in cases:
         known.setdefault(normalize(case.expected), case.expected)
@@ -116,7 +150,7 @@ def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = No
     per_group: dict = {}
     confidence = {True: [], False: []}
     scored = []
-    for case, completion in zip(cases, completions):
+    for case, completion in scored_cases:
         predicted = known.get(normalize(completion.text), "(otra)")
         row = confusion.setdefault(case.expected, {})
         row[predicted] = row.get(predicted, 0) + 1
@@ -144,19 +178,21 @@ def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = No
         counts["f1"] = 0.0 if precision + recall == 0 else 2 * precision * recall / (precision + recall)
         f1s.append(counts["f1"])
     hits = sum(counts["correct"] for counts in per_label.values())
+    completions = [completion for _case, completion in scored_cases]
+    answered = len(completions)
     total_cost = sum(cost(completion, model.price) for completion in completions)
     invalid_count, invalid_rate, invalid_samples = invalid_report(completions, labels)
     return EvalResult(
         model=name,
-        accuracy=hits / len(cases),
-        cost_per_1k=total_cost / len(cases) * 1000,
+        accuracy=hits / answered if answered else 0.0,
+        cost_per_1k=(total_cost / answered * 1000) if answered else 0.0,
         p95_latency_s=p95(completion.latency_s for completion in completions),
         cases=len(cases),
         per_label=per_label,
         confidence_correct=mean(confidence[True]),
         confidence_wrong=mean(confidence[False]),
         wall_s=wall_s,
-        accuracy_ci95=wilson(hits, len(cases)),
+        accuracy_ci95=wilson(hits, answered),
         confusion=confusion,
         f1_macro=sum(f1s) / len(f1s) if f1s else 0.0,
         invalid_count=invalid_count,
@@ -165,4 +201,7 @@ def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = No
         cost_per_1k_correct=None if hits == 0 else total_cost / hits * 1000,
         by_confidence=confidence_table(scored),
         per_group=per_group,
+        complete=errors == 0,
+        errors=errors,
+        error_samples=error_samples,
     )
