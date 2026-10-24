@@ -22,9 +22,12 @@ def test_the_row_shows_the_confidence_interval_of_the_accuracy():
         cases=40,
         per_label={},
         accuracy_ci95=wilson(38, 40),
+        f1_macro=0.733,
     )
 
-    assert format_row(result).startswith("jev: 95% (IC 83-99%) exactitud")
+    row = format_row(result)
+    assert row.startswith("jev: 95% (IC 83-99%) exactitud")
+    assert "F1 0.73" in row
 
 
 def test_run_prints_one_comparison_row_per_model(tmp_path, capsys):
@@ -47,7 +50,7 @@ def test_run_prints_one_comparison_row_per_model(tmp_path, capsys):
 
     main(["run", str(dataset), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 50% (IC 9-91%) exactitud, $0.45/1k consultas, p95 0.10s\n"
+    assert capsys.readouterr().out == "fake: 50% (IC 9-91%) exactitud, $0.45/1k consultas, p95 0.10s, F1 0.50\n"
 
 
 def test_run_scores_text_and_image_cases_from_a_dataset_folder(tmp_path, capsys):
@@ -75,7 +78,7 @@ def test_run_scores_text_and_image_cases_from_a_dataset_folder(tmp_path, capsys)
 
     main(["run", str(tmp_path), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 100% (IC 34-100%) exactitud, $0.45/1k consultas, p95 0.10s\n"
+    assert capsys.readouterr().out == "fake: 100% (IC 34-100%) exactitud, $0.45/1k consultas, p95 0.10s, F1 1.00\n"
 
 
 def test_run_passes_every_image_when_a_case_has_several(tmp_path, capsys):
@@ -107,7 +110,7 @@ def test_run_passes_every_image_when_a_case_has_several(tmp_path, capsys):
 
     main(["run", str(tmp_path), "--models", "fake", "--config", str(config)])
 
-    assert capsys.readouterr().out == "fake: 100% (IC 21-100%) exactitud, $0.45/1k consultas, p95 0.10s\n"
+    assert capsys.readouterr().out == "fake: 100% (IC 21-100%) exactitud, $0.45/1k consultas, p95 0.10s, F1 1.00\n"
 
 
 def test_jev_uses_the_criteria_of_the_chosen_prompt_version(tmp_path, capsys, monkeypatch):
