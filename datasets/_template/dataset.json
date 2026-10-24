@@ -1,0 +1,12 @@
+[
+  {
+    "type": "text",
+    "text": "Texto que el modelo debe leer.",
+    "expected": "etiqueta"
+  },
+  {
+    "type": "image",
+    "path": "images/sample.png",
+    "expected": "etiqueta"
+  }
+]

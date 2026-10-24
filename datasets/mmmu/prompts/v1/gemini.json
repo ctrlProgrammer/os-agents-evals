@@ -1,0 +1,4 @@
+{
+  "instructions": "Answer the question about the attached image.\nFor a multiple-choice question, reply with only the letter. Otherwise reply with only the final answer.",
+  "temperature": 0
+}
