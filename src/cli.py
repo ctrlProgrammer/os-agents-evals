@@ -2,6 +2,8 @@ import argparse
 import json
 import os
 import random
+import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 from models import FakeModel, GeminiModel, JevModel, Price
@@ -126,6 +128,15 @@ def stratified(cases: list[Case], limit: int | None, seed: int) -> list[Case]:
     return [case for _, case in sorted(chosen)]
 
 
+def git_commit() -> str | None:
+    """HEAD of the repo the command was run from. None when git is not available."""
+    try:
+        output = subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return output.decode().strip() or None
+
+
 def answer_labels(kind: str, prompt: dict) -> list[str] | None:
     """Valid answers for the invalid-answer count. JEV defaults to its criteria keys."""
     if "labels" in prompt:
@@ -191,12 +202,18 @@ def main(argv=None) -> None:
         sample = {"strategy": "stratified", "seed": args.seed}
     specs = json.loads(args.config.read_text())
     is_folder = (dataset / "dataset.json").is_file()
+    commit = git_commit()
     for name in args.models.split(","):
-        kind = specs[name].get("type", "fake")
+        spec = specs[name]
+        kind = spec.get("type", "fake")
         prompt, prompt_file = load_prompt(dataset, args.prompt, kind) if is_folder and kind != "fake" else ({}, None)
         result = run_eval(
-            cases, name, build_model(specs[name], prompt), args.workers, answer_labels(kind, prompt)
+            cases, name, build_model(spec, prompt), args.workers, answer_labels(kind, prompt)
         )
+        result = replace(result, engine=spec.get("model"), price=spec.get("price"), commit=commit)
         print(format_row(result))
         if is_folder:
-            save_result(dataset, result, args.prompt, prompt_file, sample, limited=len(cases) < len(all_cases))
+            save_result(
+                dataset, result, args.prompt, prompt_file, sample,
+                limited=len(cases) < len(all_cases),
+            )

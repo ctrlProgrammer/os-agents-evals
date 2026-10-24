@@ -35,6 +35,9 @@ class EvalResult:
     complete: bool = True
     errors: int = 0
     error_samples: list = field(default_factory=list)
+    engine: str | None = None
+    price: dict | None = None
+    commit: str | None = None
 
 
 def answered_cases(cases, outcomes):

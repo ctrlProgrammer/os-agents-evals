@@ -81,6 +81,7 @@ A run writes `datasets/<name>/result/<version>/<model>.json`. `result/v2/jev.jso
 
 The file also keeps:
 
+- `engine`, the `model` string from `models.json` (`null` for `fake`), `price` as copied from that file, and `commit`, the git HEAD of the directory you ran from (`null` when git is not available)
 - `accuracy`, `accuracy_ci95`, `f1_macro`, `cases`, `wall_s`, `p95_latency_s`
 - `complete`, `errors`, `error_samples`. A case that still fails after the retries, a missing photo, or a Gemini reply with no text counts as an error, not as a wrong answer. Accuracy, cost and the interval are over the cases that answered. `cases` stays the number tried. An incomplete run is written to `<model>.incomplete.json` (or `<model>-n<N>.incomplete.json`) and does not replace a finished result. The printed row ends with `incompleta`.
 - `cost_per_1k`, `cost_per_1k_correct` (`null` when nothing is right)

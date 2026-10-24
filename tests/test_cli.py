@@ -1,9 +1,10 @@
 import json
+import subprocess
 import time
 
 import pytest
 
-from cli import format_row, main
+from cli import format_row, git_commit, main
 from runner import EvalResult, wilson
 
 
@@ -531,6 +532,43 @@ def test_workers_run_the_calls_at_once_and_the_result_keeps_the_wall_time(tmp_pa
     result = json.loads((tmp_path / "result" / "v1" / "gemini.json").read_text())
     assert result["accuracy"] == 1.0
     assert 0.4 <= result["wall_s"] < 1.0
+
+
+def test_the_result_records_the_engine_the_price_and_the_commit(tmp_path, monkeypatch):
+    dataset = tmp_path / "pets"
+    dataset.mkdir()
+    (dataset / "dataset.json").write_text(json.dumps([
+        {"type": "text", "text": "2 + 2?", "expected": "4"},
+    ]))
+    write_prompt(dataset, "v1", "gemini", {})
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({
+        "gemini": {"type": "gemini", "model": "gemini-2.5-flash",
+                   "price": {"input_per_mtok": 0.3, "output_per_mtok": 2.5}}
+    }))
+
+    def poster(url, body, headers):
+        return {"candidates": [{"content": {"parts": [{"text": "4"}]}}]}
+
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-secret")
+    monkeypatch.setattr("models.post_json", poster)
+    monkeypatch.setattr("cli.git_commit", lambda: "abc1234", raising=False)
+
+    main(["run", str(dataset), "--models", "gemini", "--config", str(config)])
+
+    result = json.loads((dataset / "result" / "v1" / "gemini.json").read_text())
+    assert result["engine"] == "gemini-2.5-flash"
+    assert result["price"] == {"input_per_mtok": 0.3, "output_per_mtok": 2.5}
+    assert result["commit"] == "abc1234"
+
+
+def test_git_commit_is_empty_when_git_fails(monkeypatch):
+    def explode(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, ["git"])
+
+    monkeypatch.setattr("cli.subprocess.check_output", explode)
+
+    assert git_commit() is None
 
 
 def test_a_failed_case_is_saved_beside_the_good_result(tmp_path, monkeypatch, capsys):
