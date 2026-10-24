@@ -108,16 +108,35 @@ def test_models_without_confidence_leave_it_empty():
     assert result.confidence_wrong is None
 
 
+def test_confusion_matrix_and_f1_per_class():
+    cases = [Case(prompt=str(index), expected=label) for index, label in enumerate(["a", "a", "b", "b"])]
+    model = fake({"0": "a", "1": "b", "2": "b", "3": "b"})
+
+    result = run_eval(cases, "fake", model)
+
+    assert result.confusion == {"a": {"a": 1, "b": 1}, "b": {"b": 2}}
+    assert (result.per_label["a"]["precision"], result.per_label["a"]["recall"]) == (1.0, 0.5)
+    assert round(result.per_label["b"]["precision"], 3) == 0.667
+    assert result.per_label["b"]["recall"] == 1.0
+    assert round(result.f1_macro, 3) == 0.733
+
+
+def test_an_answer_outside_the_labels_counts_as_otra():
+    result = run_eval([Case(prompt="1", expected="a")], "fake", fake({"1": "no se"}))
+
+    assert result.confusion == {"a": {"(otra)": 1}}
+    assert result.per_label["a"]["precision"] == 0.0
+    assert result.f1_macro == 0.0
+
+
 def test_result_counts_cases_and_hits_per_expected_label():
     model = fake({"Capital of France?": "Paris", "2 + 2?": "5"})
 
     result = run_eval(two_cases(), "fake", model)
 
     assert result.cases == 2
-    assert result.per_label == {
-        "Paris": {"correct": 1, "total": 1},
-        "4": {"correct": 0, "total": 1},
-    }
+    assert result.per_label["Paris"]["correct"] == 1
+    assert result.per_label["4"] == {"correct": 0, "total": 1, "precision": 0.0, "recall": 0.0, "f1": 0.0}
 
 
 class SlowModel:

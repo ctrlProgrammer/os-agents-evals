@@ -318,10 +318,10 @@ def test_run_saves_the_metrics_under_result_in_the_dataset_folder(tmp_path):
         "p95_latency_s": 0.1,
     }
     assert round(result["cost_per_1k"], 6) == 0.45
-    assert result["per_label"] == {
-        "4": {"correct": 1, "total": 1},
-        "6": {"correct": 0, "total": 1},
-    }
+    assert result["per_label"]["4"]["f1"] == 1.0
+    assert result["per_label"]["6"]["f1"] == 0.0
+    assert result["confusion"] == {"4": {"4": 1}, "6": {"(otra)": 1}}
+    assert result["f1_macro"] == 0.5
     assert result["run_at"].endswith("Z")
 
 
