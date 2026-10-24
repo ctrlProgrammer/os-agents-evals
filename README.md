@@ -1,50 +1,101 @@
 # os-agents-evals
 
-CLI that runs the same set of prompts against several models and compares them on accuracy, cost and latency.
+CLI that runs one dataset against several models and compares accuracy, cost and latency. Each model gets its own JSON prompt, so JEV and a normal chat model are not forced through the same text.
 
-## Usage
+## Run
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-cp .env.example .env            # fill in the keys
-set -a; . ./.env; set +a        # export them to this shell
-.venv/bin/os-evals run realslab --models <modelo> --config models.json
-.venv/bin/os-evals run oxford-iiit-pet --models <modelo> --max-evals 20   # 20 cases, the same number from each class
-.venv/bin/os-evals run freezer --models jev --max-evals 40 --no-stratified # the old even spread instead
-.venv/bin/os-evals run freezer --models jev,gemini --prompt v2            # another prompt version
-.venv/bin/os-evals run freezer --models jev,gemini --workers 8            # 8 calls at once
+cp .env.example .env          # fill in the keys
+set -a; . ./.env; set +a      # the CLI reads the environment, not the file
+.venv/bin/os-evals run freezer --models jev,gemini --max-evals 100 --workers 8
 ```
+
+A name like `freezer` is read from `datasets/freezer`. `--config` defaults to `models.json`.
 
 ```text
-<model>: 75% (IC 51-90%) exactitud, $0.48/1k consultas, $0.64/1k aciertos, p95 1.20s, F1 0.71
+jev: 94% (IC 91-95%) exactitud, $0.17/1k consultas, $0.19/1k aciertos, p95 0.85s, F1 0.92, confianza 0.96 si acierta, 0.66 si falla
 ```
 
-- **Dataset**: a folder under `datasets/<name>/` with `dataset.json` and `prompts/`. Each case is `{"type": "text", "text", "expected"}` or `{"type": "image", "path", "expected"}`. An optional `meta` object, such as `{"tipo": "nevera", "marca": "hit"}`, groups the case for `per_group` without changing the score. `path` is relative to that folder; several images are a list. Scoring is exact match, ignoring case and surrounding spaces.
-- **Models** (`--config`, default `models.json`): name → spec with token prices per million tokens. `type` is `fake`, `jev`, or `gemini`.
-  - `fake` returns canned answers. Image answers are keyed by the absolute image path.
-  - `jev` calls TypeSafe System One (`POST /v1/systemone`) as a Choice. The choice key is the label, so it must equal `expected`. `model` defaults to `jev-latest`. Published price: $0.042 per million input tokens, output free ([TypeSafe models](https://docs.typesafe.ai/models)).
-  - `gemini` calls the Gemini API from Google AI Studio (`generateContent` on `generativelanguage.googleapis.com`) and sends the key in `x-goog-api-key`, so no project or region is needed. `model` is required. Thinking tokens count as output. Gemini 2.5 Flash standard text price: $0.30 per million input tokens and $2.50 per million output tokens ([Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)).
-  - `api_key_env` names the environment variable for that service. The key is read from the environment and is never stored in the config. Defaults are `TYPESAFE_API_KEY` and `GEMINI_API_KEY`; `.env.example` lists them. The CLI reads the process environment, so export `.env` first (see Usage).
-  - Image cases send the file bytes, never the path or file name (it can carry the answer, like `Abyssinian_201.jpg`). JEV needs Pillow to fit its 280-1568 px limit: `pip install -e ".[images]"`. JEV image support is in the vendor's opt-in beta. Photo URLs already inside the case text are sent as text.
-- **`--workers N`** makes up to N calls to the model at once (default 1). The answers stay with their case, and latency is still measured per call. 40 `freezer` cases took 13 s with 8 workers on Gemini, about 7 times less than one by one. A service that limits the rate can answer 429, which stops the run, so raise it step by step.
-- **Prompts**: `--prompt <version>` (default `v1`) reads `datasets/<name>/prompts/<version>/<model type>.json`, one file per model `type`. A new version is a new folder, so old ones stay for comparison. Each model has its own format:
-  - `gemini.json`: `{"system": "...", "instructions": "...", "temperature": 0}`. All keys are optional. The user message is `instructions`, a blank line, then the case text (and the images). `system` goes in `systemInstruction`.
-  - `jev.json`: `{"state": "...", "instructions": "...", "criteria": {"label": "description or null"}}`. `criteria` is required and its keys are the only answers JEV can give. JEV is not an instruction-following chat model: it scores the `state` against a typed Choice question. The `state` sent is `state`, a blank line, the case text, then the image placeholders. `instructions` is the question and each `criteria` description is the definition of that label, so the label definitions go there and not in free text.
-  - Both end in a label that is compared with `expected`: JEV returns the choice key, Gemini returns text that must equal the label.
-  - Either prompt may add `"labels": ["a", "b"]`, the answers that count as valid. JEV uses its `criteria` keys when `labels` is absent. Without a list the invalid-answer fields stay `null`; `mmmu` leaves it off because some answers are not from a fixed list. The closed Gemini prompts (`freezer`, `realslab`, `oxford-iiit-pet`) list theirs.
-  - `fake` needs no prompt.
-- **`--max-evals N`** runs only N cases, about the same number from each class, so a rare class is still measured. A class smaller than its share gives every case it has and the rest is shared again. `--seed` (default 7) repeats the pick. `--no-stratified` keeps the even spread instead. The result records `sample` (`strategy` and `seed`; `seed` is `null` for the spread). A limited run saves `result/<version>/<model>-n<N>.json` and never replaces a full result.
-- **Confidence**: JEV returns a 0–1 `confidence` per choice. The row shows its mean when the answer is right and when it is wrong (`confianza 0.90 si acierta, 0.40 si falla`). The result also keeps `by_confidence`: for the thresholds 0.5, 0.7, 0.9, 0.95 and 0.99, the share of cases at or above it (`coverage`) and the accuracy among those cases. Gemini reports none, so its table is `null`.
-- **Cost** is the mean cost per query × 1000 (`$X/1k consultas`). `cost_per_1k_correct` divides the same total by the hits only (`$X/1k aciertos`) and is `null` when nothing is right. **Latency** is p95 (nearest rank).
-- **Invalid answers**: `invalid_count`, `invalid_rate` and up to three `invalid_samples` (clipped to 80 characters). An invalid answer still counts as a miss. The comparison is the label after stripping spaces and lowercasing, so `A` matches `a` and `A. because...` does not.
-- **Results**: every run on a dataset folder writes `datasets/<name>/result/<version>/<model>.json`, where `<version>` is the prompt version of `--prompt`, so `result/v2/` is the output of `prompts/v2/`. The file has `dataset`, `version`, `prompt` (the prompt file used, e.g. `prompts/v2/jev.json`; `null` for `fake`), `hash`, `run_at`, `model`, `cases`, `accuracy`, `cost_per_1k`, `cost_per_1k_correct`, `p95_latency_s`, `per_label` (`correct`, `total`, `precision`, `recall` and `f1` per expected label), `confusion` (expected label to the answers given; an answer that matches none of them is `(otra)`), `f1_macro` (the unweighted mean of the per-label F1, also shown in the row), and `confidence_correct` / `confidence_wrong` (mean model confidence when it hits or misses; `null` if the model reports none), `wall_s` (seconds the whole run took), `accuracy_ci95` (the 95% Wilson interval of the accuracy, shown in the row as `95% (IC 83-99%)`), `invalid_count`, `invalid_rate`, `invalid_samples`, `by_confidence`, `per_group` (for each `meta` key, `correct` and `total` per value; empty when no case has `meta`) and `sample`. `hash` is the first 8 hex chars of the SHA-256 of the prompt file followed by `dataset.json`: if it differs between two runs of the same version, the prompt or the cases were edited in place, so change the version instead. A rerun of the same version and model replaces the file; a `--max-evals N` run writes `<model>-n<N>.json` next to it and never replaces the full one. Compare prompts by diffing `result/v1/<model>.json` and `result/v2/<model>.json`. `v0` holds the runs made before prompts were versioned (a single `prompt.txt`). `prompts/` and `result/` are tracked in git; the cases and images are not.
+- **IC** is the 95% Wilson interval of the accuracy. With 40 cases one hit is worth 2.5 points, so the interval says when two runs are not really different.
+- **$X/1k consultas** is the mean cost of a call. **$X/1k aciertos** divides the same total by the hits only, and is omitted when nothing is right.
+- **F1** is the unweighted mean of the per-class F1.
+- **confianza** is JEV only: its mean confidence when the answer is right and when it is wrong.
+
+## Flags
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--models a,b` | required | Names from `models.json`. |
+| `--prompt v1` | `v1` | Reads `prompts/<version>/<model type>.json`. |
+| `--max-evals N` | all | About the same number of cases from each class. A class smaller than its share gives every case it has and the rest is shared again. |
+| `--seed 7` | `7` | Repeats that pick. |
+| `--no-stratified` | off | The older even spread, which can skip a rare class. |
+| `--workers N` | `1` | Calls in flight at once. 500 `freezer` cases took 29 s on JEV and 156 s on Gemini with 8 workers. A rate limit answers 429 and stops the run, so raise it step by step. |
+
+## Dataset
+
+`datasets/<name>/` holds `dataset.json`, `prompts/`, `result/` and, for photos, `images/`. Cases and images stay out of git. The template, each `prompts/` and each `result/` are tracked.
+
+A case is `{"type": "text", "text", "expected"}` or `{"type": "image", "path", "expected"}`. `path` is relative to the dataset folder. Several images are a list and travel as bytes only: the file name is never sent, because it can carry the answer (`Abyssinian_201.jpg`).
+
+`meta` is optional and does not change the score. `{"tipo": "nevera", "marca": "hit"}` is counted under `per_group`.
+
+Scoring is an exact match after stripping spaces and lowercasing. `A` matches `a`. `A. because...` does not.
+
+## Prompts
+
+`--prompt v2` reads `prompts/v2/` and leaves `v1` in place, so two versions can be compared. `fake` needs no prompt.
+
+`jev.json`:
+
+```json
+{"state": "Foto de un equipo de frío.", "instructions": "Qué mueble es?", "criteria": {"nevera/hit": "Nevera verde con el logo Hit."}}
+```
+
+JEV is not a chat model. It scores `state` (then the case text, then the image) against one Choice question. `criteria` is required. Its keys are the only answers JEV can give, and each value is that label's definition (`null` when the name is enough). The reply is the chosen key, plus a confidence from 0 to 1.
+
+`gemini.json`:
+
+```json
+{"system": "Eres un clasificador.", "instructions": "Responde solo con la etiqueta.", "temperature": 0, "labels": ["nunca", "hit"]}
+```
+
+Every key is optional. `system` goes in `systemInstruction`. The user message is `instructions`, a blank line, then the case text and the images. The reply is text and must equal the label.
+
+`labels` lists the answers that count as valid, for both files. JEV uses its `criteria` keys when `labels` is absent. With no list at all the invalid-answer fields stay `null`. `mmmu` leaves it off because some answers are not from a fixed list.
+
+## Models
+
+`models.json` maps a name to `{type, model, api_key_env, price}`. Prices are USD per million tokens. The key is read from the environment variable named by `api_key_env` and is never stored in the file. `.env.example` lists the names.
+
+- **fake** returns canned answers. An image answer is keyed by the absolute path.
+- **jev** calls TypeSafe System One, `POST https://api.typesafe.ai/v1/systemone`. `model` defaults to `jev-latest`. Price: $0.042 per million input tokens, output free ([TypeSafe models](https://docs.typesafe.ai/models)). Photos are fitted to JEV's 280–1568 px limit, which needs Pillow (`pip install -e ".[images]"`). Image support is the vendor's opt-in beta. Default key variable: `TYPESAFE_API_KEY`.
+- **gemini** calls the Gemini API on Google AI Studio, `generateContent` at `generativelanguage.googleapis.com`, with the key in `x-goog-api-key`. No project or region. `model` is required. Thinking tokens count as output. Gemini 2.5 Flash text price: $0.30 input and $2.50 output per million ([Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)). Default key variable: `GEMINI_API_KEY`.
+
+## Results
+
+A run writes `datasets/<name>/result/<version>/<model>.json`. `result/v2/jev.json` is the output of `prompts/v2/jev.json`. A rerun of the same version and model replaces the file. `--max-evals N` writes `<model>-n<N>.json` beside it and never replaces the full run. `v0/` holds the runs from before prompts were versioned.
+
+`hash` is the first 8 hex characters of the SHA-256 of the prompt file followed by `dataset.json`. If two runs of the same version have a different hash, the prompt or the cases were edited in place. Bump the version instead.
+
+The file also keeps:
+
+- `accuracy`, `accuracy_ci95`, `f1_macro`, `cases`, `wall_s`, `p95_latency_s`
+- `cost_per_1k`, `cost_per_1k_correct` (`null` when nothing is right)
+- `per_label`: `correct`, `total`, `precision`, `recall`, `f1` for each expected label
+- `confusion`: for each expected label, the answers given. An answer that matches none of them is `(otra)`
+- `invalid_count`, `invalid_rate`, `invalid_samples` (up to 3, clipped to 80 characters). An invalid answer still counts as a miss. `null` when the prompt has no label list
+- `confidence_correct`, `confidence_wrong`, and `by_confidence` at 0.5, 0.7, 0.9, 0.95 and 0.99 (`coverage` and `accuracy`). `null` when the model reports no confidence
+- `per_group`: for each `meta` key, `correct` and `total` per value. `{}` when no case has `meta`
+- `sample`: `{strategy, seed}`. `seed` is `null` for `--no-stratified`
 
 ## Datasets
 
-Cases and images are not in git (only `_template/` and each `prompts/` and `result/`).
-
-- `freezer`: tipo y marca de equipos de frío, 6037 fotos. Etiquetas `tipo/marca`: `nevera/{cocacola,postobon,colombiana,gatorade,hit,redbull}` y `congelador/{cremhelado,colombina}`. Fuente: `gs://harmony-ml-training/freezer/datasets/cold-equipment` (Harmony, config de gcloud por defecto, solo lectura). Se usa solo la categoría y marca de origen del manifiesto (`source_category` y `source_brand` iguales a las de la carpeta). Quedan fuera `sinmarca` y `review` (los etiquetó JEV al reetiquetar `generico`, sería circular), un nombre de archivo con dos etiquetas y 41 filas del manifiesto que ya no están en el bucket. Las fotos van planas en `images/` y `dataset.json` está en orden aleatorio con semilla fija. `--max-evals` toma la misma cantidad de cada clase. 
-- `oxford-iiit-pet`: 37 breeds, official test split. `mmmu`: validation split. `realslab`: listing audit, 4 labels.
+- **freezer**. 6675 photos, 10 labels `tipo/marca`: `nevera/{cocacola, postobon, colombiana, gatorade, hit, redbull, sinmarca}` and `congelador/{cremhelado, colombina, sinmarca}`. Each case has `meta.tipo` and `meta.marca`. Source: `gs://harmony-ml-training/freezer/datasets/cold-equipment`, read with the default gcloud config. Kept only rows whose source category and brand match the folder. Dropped the `review` folder, one file name that had two labels, and 41 manifest rows missing from the bucket. `sinmarca` was labeled by JEV while relabeling `generico`, so a JEV hit there partly grades JEV on its own labels. Photos are flat in `images/`.
+- **oxford-iiit-pet**. 37 breeds, official test split.
+- **mmmu**. Validation split. Answers are not a fixed list, so the prompt has no `labels`.
+- **realslab**. Listing audit: `ok`, `fraude`, `error_tipeo`, `anomalia_datos`.
 
 ## Tests
 
