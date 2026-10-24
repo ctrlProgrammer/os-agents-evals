@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import random
 from pathlib import Path
 
 from models import FakeModel, GeminiModel, JevModel, Price
@@ -79,6 +80,45 @@ def spread(cases: list[Case], limit: int | None) -> list[Case]:
     if limit is None or limit >= len(cases):
         return cases
     return [cases[i * len(cases) // limit] for i in range(limit)]
+
+
+def _quotas(counts: dict[str, int], limit: int) -> dict[str, int]:
+    """How many cases each class gives. A class smaller than its share gives all of it and the rest is shared again."""
+    quota = {label: 0 for label in counts}
+    left = limit
+    active = [label for label in counts if counts[label] > 0]
+    while left and active:
+        share, extra = divmod(left, len(active))
+        if share == 0:
+            for label in active[:left]:
+                quota[label] += 1
+            break
+        still_active = []
+        for index, label in enumerate(active):
+            room = counts[label] - quota[label]
+            give = min(share + (index < extra), room)
+            quota[label] += give
+            left -= give
+            if quota[label] < counts[label]:
+                still_active.append(label)
+        active = still_active
+    return quota
+
+
+def stratified(cases: list[Case], limit: int | None, seed: int) -> list[Case]:
+    """At most `limit` cases, about the same number from each class. `seed` repeats the pick."""
+    if limit is None or limit >= len(cases):
+        return cases
+    groups: dict[str, list[tuple[int, Case]]] = {}
+    for index, case in enumerate(cases):
+        groups.setdefault(case.expected, []).append((index, case))
+    quota = _quotas({label: len(items) for label, items in groups.items()}, limit)
+    picked_by = random.Random(seed)
+    chosen = []
+    for label, items in groups.items():
+        take = quota[label]
+        chosen.extend(items if take == len(items) else picked_by.sample(items, take))
+    return [case for _, case in sorted(chosen)]
 
 
 def format_row(result) -> str:
