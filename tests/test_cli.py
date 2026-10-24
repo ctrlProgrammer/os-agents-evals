@@ -358,15 +358,41 @@ def four_case_dataset(tmp_path):
     return dataset
 
 
+def balanced_dataset(tmp_path):
+    """10 of a, 10 of b and 1 of c. An even spread of 6 never reaches c."""
+    dataset = tmp_path / "pets"
+    dataset.mkdir()
+    items = [
+        {"type": "text", "text": f"{label}-{index}", "expected": label}
+        for label, count in (("a", 10), ("b", 10), ("c", 1))
+        for index in range(count)
+    ]
+    (dataset / "dataset.json").write_text(json.dumps(items))
+    return dataset
+
+
+def test_max_evals_takes_every_class_and_records_the_sample(tmp_path):
+    dataset = balanced_dataset(tmp_path)
+    config = fake_config(tmp_path, {})
+
+    main(["run", str(dataset), "--models", "fake", "--config", str(config), "--max-evals", "6", "--seed", "7"])
+
+    result = json.loads((dataset / "result" / "v1" / "fake-n6.json").read_text())
+    assert result["per_label"]["c"]["total"] == 1
+    assert result["per_label"]["a"]["total"] + result["per_label"]["b"]["total"] == 5
+    assert result["sample"] == {"strategy": "stratified", "seed": 7}
+
+
 def test_max_evals_runs_cases_spread_over_the_dataset(tmp_path):
     dataset = four_case_dataset(tmp_path)
     # only the 1st and 3rd case are answered right: a head cut would score 50%
     config = fake_config(tmp_path, {"a": "a", "c": "c"})
 
-    main(["run", str(dataset), "--models", "fake", "--config", str(config), "--max-evals", "2"])
+    main(["run", str(dataset), "--models", "fake", "--config", str(config), "--max-evals", "2", "--no-stratified"])
 
     result = json.loads((dataset / "result" / "v1" / "fake-n2.json").read_text())
     assert (result["cases"], result["accuracy"]) == (2, 1.0)
+    assert result["sample"] == {"strategy": "spread", "seed": None}
 
 
 def test_max_evals_above_the_dataset_size_runs_every_case(tmp_path):

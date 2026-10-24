@@ -148,7 +148,9 @@ def main(argv=None) -> None:
     run.add_argument("--config", type=Path, default=Path("models.json"))
     run.add_argument("--prompt", default="v1", help="prompt version: datasets/<name>/prompts/<version>/<model type>.json")
     run.add_argument("--workers", type=int, default=1, help="calls to the model made at once")
-    run.add_argument("--max-evals", type=int, help="run only this many cases, spread over the dataset")
+    run.add_argument("--max-evals", type=int, help="run only this many cases, the same number from each class")
+    run.add_argument("--no-stratified", action="store_true", help="pick the cases evenly spaced instead")
+    run.add_argument("--seed", type=int, default=7, help="repeats the stratified pick")
     args = parser.parse_args(argv)
     if args.max_evals is not None and args.max_evals < 1:
         parser.error("--max-evals must be at least 1")
@@ -159,7 +161,12 @@ def main(argv=None) -> None:
     if not (dataset / "dataset.json").is_file() and not dataset.is_file():
         dataset = Path("datasets") / dataset
     all_cases = load_cases(dataset)
-    cases = spread(all_cases, args.max_evals)
+    if args.no_stratified:
+        cases = spread(all_cases, args.max_evals)
+        sample = {"strategy": "spread", "seed": None}
+    else:
+        cases = stratified(all_cases, args.max_evals, args.seed)
+        sample = {"strategy": "stratified", "seed": args.seed}
     specs = json.loads(args.config.read_text())
     is_folder = (dataset / "dataset.json").is_file()
     for name in args.models.split(","):
@@ -168,4 +175,4 @@ def main(argv=None) -> None:
         result = run_eval(cases, name, build_model(specs[name], prompt), args.workers)
         print(format_row(result))
         if is_folder:
-            save_result(dataset, result, args.prompt, prompt_file, limited=len(cases) < len(all_cases))
+            save_result(dataset, result, args.prompt, prompt_file, sample, limited=len(cases) < len(all_cases))
