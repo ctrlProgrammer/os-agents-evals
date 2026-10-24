@@ -29,6 +29,10 @@ class EvalResult:
     invalid_rate: float | None = None
     invalid_samples: list | None = None
     cost_per_1k_correct: float | None = None
+    by_confidence: list | None = None
+
+
+CONFIDENCE_THRESHOLDS = (0.5, 0.7, 0.9, 0.95, 0.99)
 
 
 def normalize(text: str) -> str:
@@ -65,6 +69,21 @@ def mean(values) -> float | None:
     return sum(values) / len(values) if values else None
 
 
+def confidence_table(scored: list[tuple[float | None, bool]]) -> list | None:
+    """Coverage and accuracy at each threshold, for models that report a confidence."""
+    if not scored or all(confidence is None for confidence, _hit in scored):
+        return None
+    rows = []
+    for threshold in CONFIDENCE_THRESHOLDS:
+        kept = [hit for confidence, hit in scored if confidence is not None and confidence >= threshold]
+        rows.append({
+            "threshold": threshold,
+            "coverage": len(kept) / len(scored),
+            "accuracy": None if not kept else sum(kept) / len(kept),
+        })
+    return rows
+
+
 def invalid_report(completions, labels: list[str] | None) -> tuple:
     """How many answers are outside `labels`. None when the run has no label list."""
     if labels is None:
@@ -93,6 +112,7 @@ def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = No
     per_label: dict = {}
     confusion: dict = {}
     confidence = {True: [], False: []}
+    scored = []
     for case, completion in zip(cases, completions):
         predicted = known.get(normalize(completion.text), "(otra)")
         row = confusion.setdefault(case.expected, {})
@@ -101,6 +121,7 @@ def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = No
         hit = predicted == case.expected
         counts["total"] += 1
         counts["correct"] += hit
+        scored.append((completion.confidence, bool(hit)))
         if completion.confidence is not None:
             confidence[hit].append(completion.confidence)
     predicted_totals: dict = {}
@@ -135,4 +156,5 @@ def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = No
         invalid_rate=invalid_rate,
         invalid_samples=invalid_samples,
         cost_per_1k_correct=None if hits == 0 else total_cost / hits * 1000,
+        by_confidence=confidence_table(scored),
     )

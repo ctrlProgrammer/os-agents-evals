@@ -114,6 +114,34 @@ def test_result_averages_the_confidence_of_right_and_wrong_answers():
     assert result.confidence_wrong == 0.4
 
 
+def test_accuracy_by_confidence_threshold():
+    cases = [Case(prompt=prompt, expected="si") for prompt in "abcd"]
+    model = ConfidentModel({"a": 1.0, "b": 0.9, "c": 0.6, "d": 0.4})
+
+    result = run_eval(cases, "jev", model)
+    by = {row["threshold"]: row for row in result.by_confidence}
+
+    assert [row["threshold"] for row in result.by_confidence] == [0.5, 0.7, 0.9, 0.95, 0.99]
+    assert round(by[0.5]["coverage"], 3) == 0.75
+    assert round(by[0.5]["accuracy"], 3) == 0.667
+    assert (by[0.9]["coverage"], by[0.9]["accuracy"]) == (0.5, 1.0)
+
+
+def test_a_threshold_nobody_reaches_has_no_accuracy():
+    result = run_eval([Case(prompt="a", expected="si")], "jev", ConfidentModel({"a": 0.1}))
+    top = result.by_confidence[-1]
+
+    assert top["threshold"] == 0.99
+    assert top["coverage"] == 0.0
+    assert top["accuracy"] is None
+
+
+def test_models_without_confidence_have_no_threshold_table():
+    result = run_eval(two_cases(), "fake", fake({}))
+
+    assert result.by_confidence is None
+
+
 def test_models_without_confidence_leave_it_empty():
     result = run_eval(two_cases(), "fake", fake({}))
 
