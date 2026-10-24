@@ -201,6 +201,41 @@ def test_an_answer_outside_the_labels_counts_as_otra():
     assert result.f1_macro == 0.0
 
 
+def test_hits_are_counted_per_meta_group():
+    cases = [
+        Case(prompt="1", expected="a", meta={"tipo": "nevera"}),
+        Case(prompt="2", expected="a", meta={"tipo": "nevera"}),
+        Case(prompt="3", expected="b", meta={"tipo": "congelador"}),
+    ]
+    model = fake({"1": "a", "2": "no", "3": "b"})
+
+    result = run_eval(cases, "fake", model)
+
+    assert result.per_group == {
+        "tipo": {
+            "nevera": {"correct": 1, "total": 2},
+            "congelador": {"correct": 1, "total": 1},
+        }
+    }
+
+
+def test_a_case_counts_toward_every_group_it_names():
+    result = run_eval(
+        [Case(prompt="1", expected="a", meta={"tipo": "nevera", "marca": "hit"})],
+        "fake",
+        fake({"1": "a"}),
+    )
+
+    assert result.per_group["tipo"]["nevera"] == {"correct": 1, "total": 1}
+    assert result.per_group["marca"]["hit"] == {"correct": 1, "total": 1}
+
+
+def test_cases_without_meta_leave_the_groups_empty():
+    result = run_eval(two_cases(), "fake", fake({}))
+
+    assert result.per_group == {}
+
+
 def test_result_counts_cases_and_hits_per_expected_label():
     model = fake({"Capital of France?": "Paris", "2 + 2?": "5"})
 
