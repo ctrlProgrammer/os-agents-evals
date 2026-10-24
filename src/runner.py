@@ -25,6 +25,9 @@ class EvalResult:
     accuracy_ci95: tuple[float, float] = (0.0, 0.0)
     confusion: dict = field(default_factory=dict)
     f1_macro: float = 0.0
+    invalid_count: int | None = None
+    invalid_rate: float | None = None
+    invalid_samples: list | None = None
 
 
 def normalize(text: str) -> str:
@@ -61,7 +64,23 @@ def mean(values) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
+def invalid_report(completions, labels: list[str] | None) -> tuple:
+    """How many answers are outside `labels`. None when the run has no label list."""
+    if labels is None:
+        return None, None, None
+    valid = {normalize(label) for label in labels}
+    samples = []
+    count = 0
+    for completion in completions:
+        if normalize(completion.text) in valid:
+            continue
+        count += 1
+        if len(samples) < 3:
+            samples.append(completion.text.strip()[:80])
+    return count, count / len(completions), samples
+
+
+def run_eval(cases, name, model, workers: int = 1, labels: list[str] | None = None) -> EvalResult:
     started = time.perf_counter()
     with ThreadPoolExecutor(max_workers=workers) as pool:
         # map keeps the order of the cases, so every answer stays with its case
@@ -97,6 +116,7 @@ def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
         f1s.append(counts["f1"])
     hits = sum(counts["correct"] for counts in per_label.values())
     total_cost = sum(cost(completion, model.price) for completion in completions)
+    invalid_count, invalid_rate, invalid_samples = invalid_report(completions, labels)
     return EvalResult(
         model=name,
         accuracy=hits / len(cases),
@@ -110,4 +130,7 @@ def run_eval(cases, name, model, workers: int = 1) -> EvalResult:
         accuracy_ci95=wilson(hits, len(cases)),
         confusion=confusion,
         f1_macro=sum(f1s) / len(f1s) if f1s else 0.0,
+        invalid_count=invalid_count,
+        invalid_rate=invalid_rate,
+        invalid_samples=invalid_samples,
     )

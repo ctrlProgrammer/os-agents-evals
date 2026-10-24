@@ -121,6 +121,37 @@ def test_confusion_matrix_and_f1_per_class():
     assert round(result.f1_macro, 3) == 0.733
 
 
+def test_invalid_answers_are_counted_and_still_score_as_misses():
+    cases = [Case(prompt=prompt, expected=expected) for prompt, expected in (("1", "a"), ("2", "a"), ("3", "b"))]
+    model = fake({"1": "a", "2": "A. porque es la primera", "3": "b"})
+
+    result = run_eval(cases, "fake", model, labels=["a", "b"])
+
+    assert result.invalid_count == 1
+    assert round(result.invalid_rate, 3) == 0.333
+    assert result.invalid_samples == ["A. porque es la primera"]
+    assert result.accuracy == 2 / 3
+
+
+def test_invalid_samples_keep_three_and_clip_at_80_characters():
+    text = "x" * 100
+    cases = [Case(prompt=str(index), expected="a") for index in range(4)]
+    model = fake({str(index): text for index in range(4)})
+
+    result = run_eval(cases, "fake", model, labels=["a"])
+
+    assert result.invalid_count == 4
+    assert result.invalid_samples == ["x" * 80] * 3
+
+
+def test_without_labels_the_invalid_fields_stay_empty():
+    result = run_eval(two_cases(), "fake", fake({}))
+
+    assert result.invalid_count is None
+    assert result.invalid_rate is None
+    assert result.invalid_samples is None
+
+
 def test_an_answer_outside_the_labels_counts_as_otra():
     result = run_eval([Case(prompt="1", expected="a")], "fake", fake({"1": "no se"}))
 

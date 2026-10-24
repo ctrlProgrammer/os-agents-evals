@@ -281,6 +281,50 @@ def test_run_scores_a_gemini_ai_studio_reply(tmp_path, capsys, monkeypatch):
 
     row = capsys.readouterr().out
     assert row.startswith("gemini: 100% (IC 21-100%) exactitud, $300.00/1k consultas, p95 ")
+    assert json.loads((tmp_path / "result" / "v1" / "gemini.json").read_text())["invalid_rate"] is None
+
+
+def test_jev_counts_an_answer_outside_its_criteria_as_invalid(tmp_path, monkeypatch):
+    (tmp_path / "dataset.json").write_text(json.dumps([
+        {"type": "text", "text": "uno", "expected": "ok"},
+        {"type": "text", "text": "dos", "expected": "ok"},
+    ]))
+    write_prompt(tmp_path, "v1", "jev", {"criteria": {"ok": None, "fraude": None}})
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({"jev": {"type": "jev", "price": {"input_per_mtok": 0, "output_per_mtok": 0}}}))
+
+    def poster(url, body, headers):
+        choice = "ok" if body["state"].endswith("uno") else "no se"
+        return {"answers": {"etiqueta": {"choice": choice, "confidence": 0.4}}, "usage": {"input_tokens": 1, "output_tokens": 1}}
+
+    monkeypatch.setenv("TYPESAFE_API_KEY", "jev-secret")
+    monkeypatch.setattr("models.post_json", poster)
+
+    main(["run", str(tmp_path), "--models", "jev", "--config", str(config)])
+
+    result = json.loads((tmp_path / "result" / "v1" / "jev.json").read_text())
+    assert (result["invalid_count"], result["invalid_rate"], result["invalid_samples"]) == (1, 0.5, ["no se"])
+
+
+def test_a_prompt_labels_list_overrides_the_jev_criteria(tmp_path, monkeypatch):
+    (tmp_path / "dataset.json").write_text(json.dumps([
+        {"type": "text", "text": "uno", "expected": "ok"},
+    ]))
+    write_prompt(tmp_path, "v1", "jev", {"criteria": {"ok": None}, "labels": ["ok", "ninguno"]})
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({"jev": {"type": "jev", "price": {"input_per_mtok": 0, "output_per_mtok": 0}}}))
+
+    def poster(url, body, headers):
+        return {"answers": {"etiqueta": {"choice": "ninguno"}}, "usage": {"input_tokens": 1, "output_tokens": 1}}
+
+    monkeypatch.setenv("TYPESAFE_API_KEY", "jev-secret")
+    monkeypatch.setattr("models.post_json", poster)
+
+    main(["run", str(tmp_path), "--models", "jev", "--config", str(config)])
+
+    result = json.loads((tmp_path / "result" / "v1" / "jev.json").read_text())
+    assert result["invalid_count"] == 0
+    assert result["accuracy"] == 0.0
 
 
 def fake_config(tmp_path, answers):
