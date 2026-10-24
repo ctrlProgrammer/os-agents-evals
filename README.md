@@ -2,22 +2,56 @@
 
 CLI that runs one dataset against several models and compares accuracy, cost and latency. Each model gets its own JSON prompt, so JEV and a normal chat model are not forced through the same text.
 
+Two public datasets are wired up. [Oxford-IIIT Pet](https://www.robots.ox.ac.uk/~vgg/data/pets/) is the one to read first: a photo goes in, the breed name comes out. [MMMU](https://mmmu-benchmark.github.io/) is the other. Freezer and RealsLab stay on disk only. Their cases and photos are not in git.
+
+## Oxford-IIIT Pet
+
+The task is to name the breed in one photo. The official test split has 3,669 images and 37 breeds. A hit is an exact match after stripping spaces and lowercasing, so `abyssinian` counts and `Abyssinian, a cat` does not. The file name is not sent to the model, because names like `Abyssinian_201.jpg` already contain the answer.
+
+```json
+{"type": "image", "path": "images/Abyssinian_201.jpg", "expected": "Abyssinian"}
+```
+
+JEV chooses among the 37 breed names in `prompts/v1/jev.json`. Gemini is told to reply with one of those same names (`prompts/v1/gemini.json`).
+
+```bash
+.venv/bin/os-evals run oxford-iiit-pet --models jev,gemini --max-evals 20
+```
+
+The run checked in under `datasets/oxford-iiit-pet/result/v0/` is from 23 Oct 2026, before prompts were versioned. It is 20 photos, one breed each, not the full test split. One miss moves the score by 5 points.
+
+| | JEV | Gemini 2.5 Flash |
+|---|---:|---:|
+| Hits | 18 / 20 | 19 / 20 |
+| Accuracy | 90% | 95% |
+| $ / 1k queries | 0.06 | 1.64 |
+| p95 latency | 0.32 s | 4.84 s |
+| Misses | american bulldog, Egyptian Mau | Egyptian Mau |
+
+The result files are `jev-n20.json` and `gemini-2.5-flash-api-n20.json`. That run does not carry the interval, F1 or JEV's confidence. A run today prints those too.
+
+## MMMU
+
+[MMMU](https://mmmu-benchmark.github.io/) validation: a question about one or more images. Some answers are a letter (`A`), some are a short string, so the prompt does not lock Gemini to a label list. JEV's prompt only offers `A` through `E`, and a free-form answer is outside that list. No scored run is checked in yet.
+
 ## Run
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 cp .env.example .env          # fill in the keys
 set -a; . ./.env; set +a      # the CLI reads the environment, not the file
-.venv/bin/os-evals run freezer --models jev,gemini --max-evals 100 --workers 8
+.venv/bin/os-evals run oxford-iiit-pet --models jev,gemini --max-evals 20
 ```
 
-A name like `freezer` is read from `datasets/freezer`. `--config` defaults to `models.json`.
+A name like `oxford-iiit-pet` is read from `datasets/oxford-iiit-pet`. `--config` defaults to `models.json`.
 
 ```text
-jev: 94% (IC 91-95%) exactitud, $0.17/1k consultas, $0.19/1k aciertos, p95 0.85s, F1 0.92, confianza 0.96 si acierta, 0.66 si falla
+jev: 90% (IC 70-97%) exactitud, $0.06/1k consultas, $0.06/1k aciertos, p95 0.32s
 ```
 
-- **IC** is the 95% Wilson interval of the accuracy. With 40 cases one hit is worth 2.5 points, so the interval says when two runs are not really different.
+That line is what the CLI would print for the JEV column above. The checked-in JSON does not store the interval.
+
+- **IC** is the 95% Wilson interval of the accuracy. With 20 cases one hit is worth 5 points, so 18/20 and 19/20 still overlap.
 - **$X/1k consultas** is the mean cost of a call. **$X/1k aciertos** divides the same total by the hits only, and is omitted when nothing is right.
 - **F1** is the unweighted mean of the per-class F1.
 - **confianza** is JEV only: its mean confidence when the answer is right and when it is wrong.
@@ -92,11 +126,11 @@ The file also keeps:
 - `per_group`: for each `meta` key, `correct` and `total` per value. `{}` when no case has `meta`
 - `sample`: `{strategy, seed}`. `seed` is `null` for `--no-stratified`
 
-## Datasets
+## Local datasets
 
-- **freezer**. 6675 photos, 10 labels `tipo/marca`: `nevera/{cocacola, postobon, colombiana, gatorade, hit, redbull, sinmarca}` and `congelador/{cremhelado, colombina, sinmarca}`. Each case has `meta.tipo` and `meta.marca`. Kept only rows whose source category and brand match the folder. Dropped the `review` folder, one file name that had two labels, and 41 manifest rows missing from the source. `sinmarca` was labeled by JEV while relabeling `generico`, so a JEV hit there partly grades JEV on its own labels. Photos are flat in `images/`.
-- **oxford-iiit-pet**. 37 breeds, official test split.
-- **mmmu**. Validation split. Answers are not a fixed list, so the prompt has no `labels`.
+These folders are in the tree. The cases and photos are not.
+
+- **freezer**. 6,675 photos, 10 labels `tipo/marca`: `nevera/{cocacola, postobon, colombiana, gatorade, hit, redbull, sinmarca}` and `congelador/{cremhelado, colombina, sinmarca}`. Each case has `meta.tipo` and `meta.marca`. Kept only rows whose source category and brand match the folder. Dropped the `review` folder, one file name that had two labels, and 41 manifest rows missing from the source. `sinmarca` was labeled by JEV while relabeling `generico`, so a JEV hit there partly grades JEV on its own labels. Photos are flat in `images/`.
 - **realslab**. Listing audit: `ok`, `fraude`, `error_tipeo`, `anomalia_datos`.
 
 ## Tests
