@@ -252,6 +252,72 @@ def test_a_jev_run_prints_and_saves_its_confidence(tmp_path, capsys, monkeypatch
     assert (result["confidence_correct"], result["confidence_wrong"]) == (0.9, 0.4)
 
 
+def test_run_scores_openai_anthropic_and_deepseek(tmp_path, capsys, monkeypatch):
+    write_prompt(tmp_path, "v1", "openai", {"system": "Names.", "instructions": "One label."})
+    write_prompt(tmp_path, "v1", "anthropic", {"instructions": "One label.", "max_tokens": 32})
+    write_prompt(tmp_path, "v1", "deepseek", {"instructions": "One label.", "thinking": "enabled"})
+    (tmp_path / "dataset.json").write_text(json.dumps([
+        {"type": "text", "text": "a photo", "expected": "Abyssinian"},
+    ]))
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({
+        "openai": {
+            "type": "openai",
+            "model": "gpt-4o-mini",
+            "price": {"input_per_mtok": 0.15, "output_per_mtok": 0.60},
+        },
+        "anthropic": {
+            "type": "anthropic",
+            "model": "claude-haiku-5-5",
+            "price": {"input_per_mtok": 0.10, "output_per_mtok": 0.50},
+        },
+        "deepseek": {
+            "type": "deepseek",
+            "model": "deepseek-flash",
+            "price": {"input_per_mtok": 0.15, "output_per_mtok": 0.60},
+        },
+    }))
+    seen = []
+
+    def poster(url, body, headers):
+        seen.append((url, body, headers))
+        if "anthropic.com" in url:
+            return {
+                "content": [{"type": "text", "text": "Abyssinian"}],
+                "usage": {"input_tokens": 1_000_000, "output_tokens": 0},
+            }
+        return {
+            "choices": [{"message": {"content": "Abyssinian"}}],
+            "usage": {"prompt_tokens": 1_000_000, "completion_tokens": 0},
+        }
+
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-secret")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-secret")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-secret")
+    monkeypatch.setattr("models.post_json", poster)
+
+    main([
+        "run", str(tmp_path),
+        "--models", "openai,anthropic,deepseek",
+        "--config", str(config),
+    ])
+
+    row = capsys.readouterr().out
+    assert row.splitlines()[0].startswith("openai: 100% (IC 21-100%) exactitud, $150.00/1k consultas")
+    assert row.splitlines()[1].startswith("anthropic: 100% (IC 21-100%) exactitud, $100.00/1k consultas")
+    assert row.splitlines()[2].startswith("deepseek: 100% (IC 21-100%) exactitud, $150.00/1k consultas")
+    openai, anthropic, deepseek = seen
+    assert openai[0] == "https://api.openai.com/v1/chat/completions"
+    assert openai[2]["Authorization"] == "Bearer openai-secret"
+    assert openai[1]["messages"][0] == {"role": "system", "content": "Names."}
+    assert anthropic[0] == "https://api.anthropic.com/v1/messages"
+    assert anthropic[2]["x-api-key"] == "anthropic-secret"
+    assert anthropic[1]["max_tokens"] == 32
+    assert deepseek[0] == "https://api.deepseek.com/chat/completions"
+    assert deepseek[2]["Authorization"] == "Bearer deepseek-secret"
+    assert deepseek[1]["thinking"] == {"type": "enabled"}
+
+
 def test_run_scores_a_gemini_ai_studio_reply(tmp_path, capsys, monkeypatch):
     write_prompt(tmp_path, "v1", "gemini", {"instructions": "Clasifica."})
     (tmp_path / "dataset.json").write_text(json.dumps([

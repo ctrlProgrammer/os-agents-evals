@@ -4,7 +4,7 @@ import urllib.error
 
 import pytest
 
-from models import GeminiModel, JevModel, Price, post_json
+from models import AnthropicModel, GeminiModel, JevModel, OpenAIModel, Price, post_json
 
 
 class _Response:
@@ -210,6 +210,244 @@ def test_gemini_blank_text_is_an_error(monkeypatch):
 
     with pytest.raises(RuntimeError, match="no text"):
         model.complete("Clasifica este anuncio.")
+
+
+def test_openai_returns_the_choice_and_its_token_counts(monkeypatch):
+    seen = {}
+
+    def poster(url, body, headers):
+        seen["url"] = url
+        seen["body"] = body
+        seen["authorization"] = headers["Authorization"]
+        return {
+            "choices": [{"message": {"content": " Abyssinian "}}],
+            "usage": {"prompt_tokens": 80, "completion_tokens": 4},
+        }
+
+    monkeypatch.setattr("models.post_json", poster)
+    model = OpenAIModel(
+        model="gpt-4o-mini",
+        price=Price(input_per_mtok=0.15, output_per_mtok=0.60),
+        api_key="openai-key",
+    )
+
+    completion = model.complete("Name the breed.")
+
+    assert completion.text == "Abyssinian"
+    assert (completion.input_tokens, completion.output_tokens) == (80, 4)
+    assert seen["url"] == "https://api.openai.com/v1/chat/completions"
+    assert seen["authorization"] == "Bearer openai-key"
+    assert seen["body"]["model"] == "gpt-4o-mini"
+    assert seen["body"]["temperature"] == 0
+    assert seen["body"]["messages"] == [
+        {"role": "user", "content": [{"type": "text", "text": "Name the breed."}]}
+    ]
+
+
+def test_openai_applies_the_json_prompt_around_the_case_text(monkeypatch):
+    seen = {}
+
+    def poster(url, body, headers):
+        seen["body"] = body
+        return {"choices": [{"message": {"content": "ok"}}], "usage": {}}
+
+    monkeypatch.setattr("models.post_json", poster)
+    model = OpenAIModel(
+        model="gpt-4o-mini",
+        price=Price(input_per_mtok=0.15, output_per_mtok=0.60),
+        api_key="openai-key",
+        system="You name breeds.",
+        instructions="Reply with one label.",
+        temperature=0.2,
+    )
+
+    model.complete("a photo")
+
+    assert seen["body"]["messages"] == [
+        {"role": "system", "content": "You name breeds."},
+        {"role": "user", "content": [{"type": "text", "text": "Reply with one label.\n\na photo"}]},
+    ]
+    assert seen["body"]["temperature"] == 0.2
+    assert "thinking" not in seen["body"]
+
+
+def test_openai_sends_the_image_bytes_and_never_the_file_name(monkeypatch, tmp_path):
+    photo = tmp_path / "Abyssinian_201.jpg"
+    photo.write_bytes(b"first-bytes")
+    seen = {}
+
+    def poster(url, body, headers):
+        seen["body"] = body
+        return {"choices": [{"message": {"content": "Abyssinian"}}], "usage": {}}
+
+    monkeypatch.setattr("models.post_json", poster)
+    model = OpenAIModel(
+        model="gpt-4o-mini",
+        price=Price(input_per_mtok=0.15, output_per_mtok=0.60),
+        api_key="openai-key",
+    )
+
+    model.complete("Name the breed.", str(photo))
+
+    content = seen["body"]["messages"][0]["content"]
+    assert content[1] == {
+        "type": "image_url",
+        "image_url": {"url": "data:image/jpeg;base64,Zmlyc3QtYnl0ZXM="},
+    }
+    assert "Abyssinian_201" not in json.dumps(seen["body"])
+
+
+def test_openai_without_text_is_an_error(monkeypatch):
+    monkeypatch.setattr(
+        "models.post_json",
+        lambda url, body, headers: {"choices": [{"message": {"content": "  "}}]},
+    )
+    model = OpenAIModel(
+        model="gpt-4o-mini",
+        price=Price(input_per_mtok=0.15, output_per_mtok=0.60),
+        api_key="openai-key",
+    )
+
+    with pytest.raises(RuntimeError, match="no text"):
+        model.complete("Name the breed.")
+
+
+def test_anthropic_returns_the_text_block_and_its_token_counts(monkeypatch):
+    seen = {}
+
+    def poster(url, body, headers):
+        seen["url"] = url
+        seen["body"] = body
+        seen["headers"] = headers
+        return {
+            "content": [{"type": "text", "text": " Egyptian_Mau "}],
+            "usage": {"input_tokens": 90, "output_tokens": 3},
+        }
+
+    monkeypatch.setattr("models.post_json", poster)
+    model = AnthropicModel(
+        model="claude-haiku-5-5",
+        price=Price(input_per_mtok=0.10, output_per_mtok=0.50),
+        api_key="anthropic-key",
+    )
+
+    completion = model.complete("Name the breed.")
+
+    assert completion.text == "Egyptian_Mau"
+    assert (completion.input_tokens, completion.output_tokens) == (90, 3)
+    assert seen["url"] == "https://api.anthropic.com/v1/messages"
+    assert seen["headers"]["x-api-key"] == "anthropic-key"
+    assert seen["headers"]["anthropic-version"] == "2023-06-01"
+    assert seen["body"]["model"] == "claude-haiku-5-5"
+    assert seen["body"]["max_tokens"] == 1024
+    assert seen["body"]["temperature"] == 0
+    assert "system" not in seen["body"]
+    assert seen["body"]["messages"] == [
+        {"role": "user", "content": [{"type": "text", "text": "Name the breed."}]}
+    ]
+
+
+def test_anthropic_sends_the_image_before_the_prompt_and_never_the_file_name(monkeypatch, tmp_path):
+    photo = tmp_path / "Abyssinian_201.jpg"
+    photo.write_bytes(b"first-bytes")
+    seen = {}
+
+    def poster(url, body, headers):
+        seen["body"] = body
+        return {"content": [{"type": "text", "text": "Abyssinian"}], "usage": {}}
+
+    monkeypatch.setattr("models.post_json", poster)
+    model = AnthropicModel(
+        model="claude-haiku-5-5",
+        price=Price(input_per_mtok=0.10, output_per_mtok=0.50),
+        api_key="anthropic-key",
+        system="You name breeds.",
+        instructions="Reply with one label.",
+        max_tokens=32,
+    )
+
+    model.complete("a photo", str(photo))
+
+    assert seen["body"]["system"] == "You name breeds."
+    assert seen["body"]["max_tokens"] == 32
+    assert seen["body"]["messages"][0]["content"] == [
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/jpeg",
+                "data": "Zmlyc3QtYnl0ZXM=",
+            },
+        },
+        {"type": "text", "text": "Reply with one label.\n\na photo"},
+    ]
+    assert "Abyssinian_201" not in json.dumps(seen["body"])
+
+
+def test_anthropic_scores_the_text_block_and_not_the_thinking_block(monkeypatch):
+    monkeypatch.setattr(
+        "models.post_json",
+        lambda url, body, headers: {
+            "content": [
+                {"type": "thinking", "thinking": "maybe a cat"},
+                {"type": "text", "text": "Siamese"},
+            ],
+            "usage": {"input_tokens": 1, "output_tokens": 2},
+        },
+    )
+    model = AnthropicModel(
+        model="claude-haiku-5-5",
+        price=Price(input_per_mtok=0.10, output_per_mtok=0.50),
+        api_key="anthropic-key",
+    )
+
+    assert model.complete("Name the breed.").text == "Siamese"
+
+
+def test_anthropic_without_text_is_an_error(monkeypatch):
+    monkeypatch.setattr(
+        "models.post_json",
+        lambda url, body, headers: {"content": [{"type": "thinking", "thinking": "hmm"}]},
+    )
+    model = AnthropicModel(
+        model="claude-haiku-5-5",
+        price=Price(input_per_mtok=0.10, output_per_mtok=0.50),
+        api_key="anthropic-key",
+    )
+
+    with pytest.raises(RuntimeError, match="no text"):
+        model.complete("Name the breed.")
+
+
+def test_deepseek_posts_a_chat_completion_with_thinking_off(monkeypatch):
+    seen = {}
+
+    def poster(url, body, headers):
+        seen["url"] = url
+        seen["body"] = body
+        seen["authorization"] = headers["Authorization"]
+        return {
+            "choices": [{"message": {"content": "Siamese", "reasoning_content": "a long thought"}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 8},
+        }
+
+    monkeypatch.setattr("models.post_json", poster)
+    model = OpenAIModel(
+        model="deepseek-flash",
+        price=Price(input_per_mtok=0.15, output_per_mtok=0.60),
+        api_key="deepseek-key",
+        url="https://api.deepseek.com/chat/completions",
+        thinking="disabled",
+    )
+
+    completion = model.complete("Name the breed.")
+
+    assert completion.text == "Siamese"
+    assert completion.output_tokens == 8
+    assert seen["url"] == "https://api.deepseek.com/chat/completions"
+    assert seen["authorization"] == "Bearer deepseek-key"
+    assert seen["body"]["thinking"] == {"type": "disabled"}
+    assert seen["body"]["model"] == "deepseek-flash"
 
 
 def test_gemini_returns_the_ai_studio_text_and_token_counts(monkeypatch):
