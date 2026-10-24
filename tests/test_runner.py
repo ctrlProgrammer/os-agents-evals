@@ -1,7 +1,7 @@
 import time
 
 from models import Completion, FakeModel, Price
-from runner import Case, p95, run_eval
+from runner import Case, p95, run_eval, wilson
 
 
 def two_cases():
@@ -19,6 +19,17 @@ def fake(answers, latency_s=0.1):
         output_tokens=10,
         price=Price(input_per_mtok=3.0, output_per_mtok=15.0),
     )
+
+
+def test_wilson_interval_for_38_hits_out_of_40():
+    assert [round(bound, 3) for bound in wilson(38, 40)] == [0.835, 0.986]
+
+
+def test_result_carries_the_wilson_interval_of_its_accuracy():
+    result = run_eval(two_cases(), "fake", fake({"Capital of France?": "Paris", "2 + 2?": "5"}))
+
+    assert result.accuracy == 0.5
+    assert [round(bound, 3) for bound in result.accuracy_ci95] == [round(bound, 3) for bound in wilson(1, 2)]
 
 
 def test_accuracy_is_share_of_exact_matches_ignoring_case_and_spaces():

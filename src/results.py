@@ -18,7 +18,7 @@ def content_hash(folder: Path, prompt_file: Path | None) -> str:
     return digest.hexdigest()[:VERSION_LENGTH]
 
 
-def save_result(folder: Path, result, version: str, prompt_file: Path | None = None, limited: bool = False) -> Path:
+def save_result(folder: Path, result, version: str, prompt_file: Path | None = None, sample: dict | None = None, limited: bool = False) -> Path:
     """Write result/<version>/<model>.json, where <version> is the prompt version.
 
     A rerun replaces it. A limited run (--max-evals) writes <model>-n<cases>.json
@@ -31,6 +31,7 @@ def save_result(folder: Path, result, version: str, prompt_file: Path | None = N
         "version": version,
         "prompt": prompt_file.relative_to(folder).as_posix() if prompt_file else None,
         "hash": content_hash(folder, prompt_file),
+        "sample": sample,
         "run_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         **asdict(result),
     }
