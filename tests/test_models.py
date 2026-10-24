@@ -1,6 +1,99 @@
+import io
 import json
+import urllib.error
 
-from models import GeminiModel, JevModel, Price
+import pytest
+
+from models import GeminiModel, JevModel, Price, post_json
+
+
+class _Response:
+    def __init__(self, payload):
+        self.payload = json.dumps(payload).encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self):
+        return self.payload
+
+
+def _http_error(status):
+    return urllib.error.HTTPError("https://example.test", status, "no", {}, io.BytesIO(b""))
+
+
+def test_post_json_retries_a_transient_status_then_returns_the_body(monkeypatch):
+    for status in (429, 500, 502, 503, 504):
+        calls = {"n": 0}
+        pauses = []
+
+        def urlopen(request, timeout):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise _http_error(status)
+            return _Response({"ok": True})
+
+        monkeypatch.setattr("models.urllib.request.urlopen", urlopen)
+        monkeypatch.setattr("models.time.sleep", lambda seconds: pauses.append(seconds))
+
+        assert post_json("https://example.test", {"q": 1}, {}) == {"ok": True}
+        assert calls["n"] == 2
+        assert pauses == [1]
+
+
+def test_post_json_does_not_retry_a_rejected_request(monkeypatch):
+    calls = {"n": 0}
+    pauses = []
+
+    def urlopen(request, timeout):
+        calls["n"] += 1
+        raise _http_error(401)
+
+    monkeypatch.setattr("models.urllib.request.urlopen", urlopen)
+    monkeypatch.setattr("models.time.sleep", lambda seconds: pauses.append(seconds))
+
+    with pytest.raises(RuntimeError, match="HTTP 401"):
+        post_json("https://example.test", {}, {})
+    assert calls["n"] == 1
+    assert pauses == []
+
+
+def test_post_json_retries_a_timeout_then_returns_the_body(monkeypatch):
+    calls = {"n": 0}
+    pauses = []
+
+    def urlopen(request, timeout):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise urllib.error.URLError(TimeoutError("timed out"))
+        return _Response({"ok": True})
+
+    monkeypatch.setattr("models.urllib.request.urlopen", urlopen)
+    monkeypatch.setattr("models.time.sleep", lambda seconds: pauses.append(seconds))
+
+    assert post_json("https://example.test", {}, {}) == {"ok": True}
+    assert calls["n"] == 2
+    assert pauses == [1]
+
+
+def test_post_json_stops_after_three_timeouts(monkeypatch):
+    calls = {"n": 0}
+    pauses = []
+
+    def urlopen(request, timeout):
+        calls["n"] += 1
+        raise urllib.error.URLError(TimeoutError("timed out"))
+
+    monkeypatch.setattr("models.urllib.request.urlopen", urlopen)
+    monkeypatch.setattr("models.time.sleep", lambda seconds: pauses.append(seconds))
+
+    with pytest.raises(RuntimeError, match="timed out"):
+        post_json("https://example.test", {}, {})
+    assert calls["n"] == 3
+    assert pauses == [1, 1]
 
 
 def test_jev_returns_the_choice_and_its_token_counts(monkeypatch):
@@ -87,6 +180,36 @@ def test_jev_reports_the_confidence_of_its_choice(monkeypatch):
     )
 
     assert model.complete("foto").confidence == 0.81
+
+
+def test_gemini_without_text_is_an_error(monkeypatch):
+    def poster(url, body, headers):
+        return {"candidates": []}
+
+    monkeypatch.setattr("models.post_json", poster)
+    model = GeminiModel(
+        model="gemini-2.5-flash",
+        price=Price(input_per_mtok=0.30, output_per_mtok=2.50),
+        api_key="gemini-key",
+    )
+
+    with pytest.raises(RuntimeError, match="no text"):
+        model.complete("Clasifica este anuncio.")
+
+
+def test_gemini_blank_text_is_an_error(monkeypatch):
+    def poster(url, body, headers):
+        return {"candidates": [{"content": {"parts": [{"text": "  "}]}}]}
+
+    monkeypatch.setattr("models.post_json", poster)
+    model = GeminiModel(
+        model="gemini-2.5-flash",
+        price=Price(input_per_mtok=0.30, output_per_mtok=2.50),
+        api_key="gemini-key",
+    )
+
+    with pytest.raises(RuntimeError, match="no text"):
+        model.complete("Clasifica este anuncio.")
 
 
 def test_gemini_returns_the_ai_studio_text_and_token_counts(monkeypatch):

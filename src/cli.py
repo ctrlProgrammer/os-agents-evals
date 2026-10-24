@@ -145,6 +145,9 @@ def format_row(result) -> str:
         + f", p95 {result.p95_latency_s:.2f}s, "
         f"F1 {result.f1_macro:.2f}"
     )
+    if not result.complete:
+        noun = "error" if result.errors == 1 else "errores"
+        row += f", incompleta, {result.errors} {noun}"
     if result.confidence_correct is None and result.confidence_wrong is None:
         return row
     shown = [

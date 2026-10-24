@@ -45,6 +45,34 @@ class FakeModel:
         )
 
 
+# A 429 or a 5xx from the vendor is usually gone a second later. Three tries, then surface it.
+RETRY_STATUSES = {429, 500, 502, 503, 504}
+ATTEMPTS = 3
+RETRY_PAUSE_S = 1
+
+
+class _Retry(Exception):
+    def __init__(self, final: RuntimeError):
+        self.final = final
+
+
+def _post_once(request) -> dict:
+    """One POST. A transient failure raises _Retry; anything else propagates."""
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        final = RuntimeError(f"model request failed with HTTP {error.code}")
+        if error.code in RETRY_STATUSES:
+            raise _Retry(final) from error
+        raise final from error
+    except urllib.error.URLError as error:
+        # urllib wraps a timeout as URLError(TimeoutError(...)).
+        if isinstance(error.reason, TimeoutError):
+            raise _Retry(RuntimeError("model request failed: timed out")) from error
+        raise
+
+
 def post_json(url: str, body: dict, headers: dict) -> dict:
     """POST JSON and return the decoded object. The error text stays off the message."""
     request = urllib.request.Request(
@@ -53,11 +81,13 @@ def post_json(url: str, body: dict, headers: dict) -> dict:
         headers={**headers, "Content-Type": "application/json"},
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(request, timeout=120) as response:
-            return json.load(response)
-    except urllib.error.HTTPError as error:
-        raise RuntimeError(f"model request failed with HTTP {error.code}") from error
+    for attempt in range(ATTEMPTS):
+        try:
+            return _post_once(request)
+        except _Retry as retry:
+            if attempt == ATTEMPTS - 1:
+                raise retry.final from retry
+            time.sleep(RETRY_PAUSE_S)
 
 
 def image_paths(image: str) -> list[str]:
@@ -153,10 +183,16 @@ class GeminiModel:
         if self.system:
             body["systemInstruction"] = {"parts": [{"text": self.system}]}
         payload = post_json(url, body, {"x-goog-api-key": self.api_key})
-        parts = payload["candidates"][0]["content"]["parts"]
+        try:
+            parts = payload["candidates"][0]["content"]["parts"]
+            text = "".join(part.get("text", "") for part in parts).strip()
+        except (KeyError, IndexError, TypeError):
+            text = ""
+        if not text:
+            raise RuntimeError("gemini response had no text")
         usage = payload.get("usageMetadata", {})
         return Completion(
-            text="".join(part.get("text", "") for part in parts).strip(),
+            text=text,
             input_tokens=int(usage.get("promptTokenCount", 0)),
             # thinking tokens are billed as output
             output_tokens=int(usage.get("candidatesTokenCount", 0))

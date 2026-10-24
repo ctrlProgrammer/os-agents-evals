@@ -533,6 +533,44 @@ def test_workers_run_the_calls_at_once_and_the_result_keeps_the_wall_time(tmp_pa
     assert 0.4 <= result["wall_s"] < 1.0
 
 
+def test_a_failed_case_is_saved_beside_the_good_result(tmp_path, monkeypatch, capsys):
+    dataset = tmp_path / "pets"
+    dataset.mkdir()
+    (dataset / "dataset.json").write_text(json.dumps([
+        {"type": "text", "text": "bad", "expected": "a"},
+        {"type": "text", "text": "good", "expected": "a"},
+    ]))
+    write_prompt(dataset, "v1", "gemini", {"labels": ["a"]})
+    config = tmp_path / "models.json"
+    config.write_text(json.dumps({
+        "gemini": {"type": "gemini", "model": "gemini-2.5-flash",
+                   "price": {"input_per_mtok": 0, "output_per_mtok": 0}}
+    }))
+    state = {"fail": False}
+
+    def poster(url, body, headers):
+        text = body["contents"][0]["parts"][0]["text"]
+        if state["fail"] and text == "bad":
+            raise RuntimeError("model request failed with HTTP 429")
+        return {"candidates": [{"content": {"parts": [{"text": "a"}]}}]}
+
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-secret")
+    monkeypatch.setattr("models.post_json", poster)
+    run = ["run", str(dataset), "--models", "gemini", "--config", str(config)]
+
+    main(run)
+    state["fail"] = True
+    main(run)
+
+    assert json.loads((dataset / "result" / "v1" / "gemini.json").read_text())["error_samples"] == []
+    saved = json.loads((dataset / "result" / "v1" / "gemini.incomplete.json").read_text())
+    assert saved["complete"] is False
+    assert saved["errors"] == 1
+    assert saved["error_samples"] == ["model request failed with HTTP 429"]
+    assert (saved["accuracy"], saved["cases"]) == (1.0, 2)
+    assert "incompleta, 1 error" in capsys.readouterr().out
+
+
 def test_workers_below_one_are_rejected(tmp_path):
     dataset = four_case_dataset(tmp_path)
     config = fake_config(tmp_path, {})
