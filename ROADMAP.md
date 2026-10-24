@@ -87,6 +87,8 @@ Otro ejemplo: con A de 50 casos, B de 50 y C de 1, `--max-evals 6` toma 1 de C y
 
 ### 5. Tasa de respuestas inválidas
 
+**Estado: hecho.** `labels` en el prompt, y en JEV las claves de `criteria` si no está. `mmmu` no lo define.
+
 **Por qué.** Gemini responde texto libre. Una respuesta como `Nevera/Cocacola.` o una frase larga hoy cuenta como fallo, igual que una etiqueta equivocada, y no sabemos cuál de las dos pasó.
 
 **Qué.** El prompt (JSON de cualquier modelo) acepta una clave opcional `labels` con las respuestas válidas; en JEV, por defecto son las claves de `criteria`. El resultado agrega `invalid_rate`, `invalid_count` y hasta 3 ejemplos recortados a 80 caracteres en `invalid_samples`. Sin `labels` el campo queda en `null`. Los datasets de respuesta abierta (MMMU) no la definen.
@@ -99,6 +101,8 @@ Otro ejemplo: con A de 50 casos, B de 50 y C de 1, `--max-evals 6` toma 1 de C y
 **Fuera.** Aceptar variantes (punto final, mayúsculas con acento). Esta métrica sirve justo para decidir si hace falta.
 
 ### 6. Exactitud por umbral de confianza
+
+**Estado: hecho.** `by_confidence` en el JSON, con los cinco umbrales. En `null` si el modelo no reporta confianza.
 
 **Por qué.** JEV devuelve confianza, pero en la corrida `v1` su único fallo tuvo 0,99. Hay que medir si la confianza sirve para decidir qué mandar a revisión humana.
 
@@ -114,6 +118,8 @@ Otro ejemplo: con A de 50 casos, B de 50 y C de 1, `--max-evals 6` toma 1 de C y
 ## Fase 4. Costo y agrupación
 
 ### 7. Costo por acierto
+
+**Estado: hecho.** `cost_per_1k_correct` en el resultado y `$X/1k aciertos` en la fila.
 
 **Por qué.** El costo por 1k consultas no compara un modelo barato que falla más contra uno caro que acierta más.
 
